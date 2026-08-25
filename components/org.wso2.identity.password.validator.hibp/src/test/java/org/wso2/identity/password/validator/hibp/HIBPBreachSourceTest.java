@@ -49,6 +49,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertNotNull;
+import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
@@ -291,6 +292,26 @@ public class HIBPBreachSourceTest {
     /**
      * The settings the core would have handed the connector.
      */
+
+    @Test
+    public void placeholderAndBlankKeysAreNotSentAsCredentials() {
+
+        // The Console's generic form will not submit an empty text field, so the API key defaults to a
+        // placeholder. Every form of "no key" has to resolve to no key, or the placeholder itself would be
+        // sent to the service as a credential.
+        assertNull(HIBPBreachSource.normalizeApiKey(null));
+        assertNull(HIBPBreachSource.normalizeApiKey(""));
+        assertNull(HIBPBreachSource.normalizeApiKey("   "));
+        assertNull(HIBPBreachSource.normalizeApiKey(HIBPConnectorConfig.NO_API_KEY));
+        assertNull(HIBPBreachSource.normalizeApiKey("None"));
+        assertNull(HIBPBreachSource.normalizeApiKey("  NONE  "));
+
+        assertEquals(HIBPBreachSource.normalizeApiKey("real-key"), "real-key");
+        assertEquals(HIBPBreachSource.normalizeApiKey("  real-key  "), "real-key");
+        // A key that merely contains the placeholder is still a key.
+        assertEquals(HIBPBreachSource.normalizeApiKey("none-of-your-business"), "none-of-your-business");
+    }
+
     private static final class MapConfiguration implements SourceConfiguration {
 
         private final Map<String, String> values = new HashMap<>();

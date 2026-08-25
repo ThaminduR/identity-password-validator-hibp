@@ -57,6 +57,16 @@ public class HIBPConnectorConfig implements IdentityConnectorConfig {
      * the same convention the shipped Sift and ELK connectors use for their own keys.
      */
     public static final String API_KEY = "__secret__hibp.apiKey";
+
+    /**
+     * What the API key holds when there is no key to hold.
+     * <p>
+     * The Console's generic connector form marks every text field {@code required}, with no way for a
+     * connector to say otherwise, so an empty API key makes the browser refuse to submit the form - and an
+     * administrator with no key could not change the switches either. A default that is never empty keeps
+     * the form usable. {@link #NO_API_KEY} is treated as absent everywhere the key is read.
+     */
+    public static final String NO_API_KEY = "none";
     public static final String ENABLE = "hibp.enable";
     public static final String REFUSE_WHEN_UNREACHABLE = "hibp.refuseWhenUnreachable";
 
@@ -110,7 +120,7 @@ public class HIBPConnectorConfig implements IdentityConnectorConfig {
         // explanations live in the connector's documentation.
         Map<String, String> descriptions = new LinkedHashMap<>();
         descriptions.put(ENABLE, "Refuse passwords found in the Have I Been Pwned breach corpus.");
-        descriptions.put(API_KEY, "Optional. The endpoint this connector calls needs no key.");
+        descriptions.put(API_KEY, "Optional. Leave this as \"none\" if you do not have a key.");
         descriptions.put(REFUSE_WHEN_UNREACHABLE, "Block password changes while the service is unreachable.");
 
         return descriptions;
@@ -127,9 +137,9 @@ public class HIBPConnectorConfig implements IdentityConnectorConfig {
     public Properties getDefaultPropertyValues(String tenantDomain) throws IdentityGovernanceException {
 
         Properties defaults = new Properties();
-        // No key. The range endpoint is unauthenticated, and a missing key must never be read as a reason
-        // to stop checking.
-        defaults.put(API_KEY, "");
+        // Not empty: see NO_API_KEY. The range endpoint is unauthenticated, and a missing key must never be
+        // read as a reason to stop checking.
+        defaults.put(API_KEY, NO_API_KEY);
         // Off until an administrator asks for it.
         defaults.put(ENABLE, "false");
         // A third party's outage should not stop every password change in the deployment.

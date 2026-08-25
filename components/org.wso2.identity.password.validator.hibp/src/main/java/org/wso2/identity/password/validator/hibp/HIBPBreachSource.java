@@ -236,12 +236,30 @@ public class HIBPBreachSource implements BreachSource {
      */
     private String resolveApiKey(String tenantDomain) {
 
-        String configured = readProperty(tenantDomain, HIBPConnectorConfig.API_KEY);
-        if (configured != null && !configured.trim().isEmpty()) {
-            return configured.trim();
+        String configured = normalizeApiKey(readProperty(tenantDomain, HIBPConnectorConfig.API_KEY));
+        if (configured != null) {
+            return configured;
         }
         char[] deploymentKey = apiKey;
-        return deploymentKey == null || deploymentKey.length == 0 ? null : new String(deploymentKey);
+        return deploymentKey == null ? null : normalizeApiKey(new String(deploymentKey));
+    }
+
+    /**
+     * The one place that decides whether a configured value is a key at all.
+     * <p>
+     * Blank is no key, and so is the {@link HIBPConnectorConfig#NO_API_KEY} placeholder the Console shows an
+     * administrator who has none. Sending either as a credential would be worse than sending nothing.
+     */
+    static String normalizeApiKey(String value) {
+
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        if (trimmed.isEmpty() || HIBPConnectorConfig.NO_API_KEY.equalsIgnoreCase(trimmed)) {
+            return null;
+        }
+        return trimmed;
     }
 
     /**

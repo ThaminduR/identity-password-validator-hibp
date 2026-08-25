@@ -55,7 +55,7 @@ when this bundle is installed and disappears when it is removed - no product cha
 | Setting | Default | Meaning |
 |---|---|---|
 | `hibp.enable` | `false` | Consult this source for the organization. |
-| `__secret__hibp.apiKey` | empty | The key to present for this organization. Optional - see below. |
+| `__secret__hibp.apiKey` | `none` | The key to present for this organization. Optional - see below. |
 | `hibp.refuseWhenUnreachable` | `false` | Refuse the password when this service cannot answer, rather than letting it through. |
 
 ```http
@@ -70,10 +70,29 @@ make an administrator type `allow` or `deny` by hand.
 The API key carries the platform's `__secret__` prefix, the same convention the shipped Sift and ELK
 connectors use. That is what makes the Console render it as a password field rather than a plain text box.
 
-**A key is optional, and leaving it empty is a supported configuration** - the range endpoint this connector
-calls is free and unauthenticated. An organization's own key wins; the deployment-wide `api_key` above is the
-fallback; and with neither set the source still checks every password. A blank key silently disabling the
-check is the 1.x failure this connector exists to avoid.
+**A key is optional** - the range endpoint this connector calls is free and unauthenticated. An
+organization's own key wins; the deployment-wide `api_key` above is the fallback; and with neither set the
+source still checks every password. A missing key silently disabling the check is the 1.x failure this
+connector exists to avoid.
+
+The key defaults to the literal `none` rather than to an empty string, and `none` is treated as no key at
+all. That is a workaround for the Console, not a preference. The generic connector form marks every text
+field `required` with no way for a connector to opt out:
+
+```tsx
+// dynamic-connector-form.tsx
+<Field ... required={ true } validate={ [ required ] } />
+```
+
+An empty API key therefore makes the browser refuse to submit the form, so an administrator without a key
+could not change the two switches either. A default that is never empty keeps the form usable. `normalizeApiKey`
+is the single place that maps blank and `none` to no key, and it is covered by a test - if the placeholder
+ever reached the wire it would be sent to the service as a credential.
+
+The shipped Sift connector has exactly this shape - `__secret__.sift.api.key`, defaulted to `""` and marked
+confidential - and avoids the problem only because `SIFT_CONNECTOR_ID` has a case in `connector-form-factory.tsx`
+that routes it to a hand-written form. This connector deliberately requires no Console change, so it takes the
+placeholder instead.
 
 **Know where the key is readable.** A governance property marked confidential is still returned in full by
 `GET /identity-governance/{category}/connectors` - we confirmed this against a running server. Marking it
