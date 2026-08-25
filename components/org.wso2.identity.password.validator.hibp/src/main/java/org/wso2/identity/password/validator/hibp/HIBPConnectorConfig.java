@@ -22,11 +22,9 @@ import org.wso2.carbon.identity.application.common.model.Property;
 import org.wso2.carbon.identity.governance.IdentityGovernanceException;
 import org.wso2.carbon.identity.governance.common.IdentityConnectorConfig;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -43,8 +41,7 @@ public class HIBPConnectorConfig implements IdentityConnectorConfig {
     public static final String CATEGORY = "Password Security";
 
     public static final String ENABLE = "hibp.enable";
-    public static final String API_KEY = "hibp.apiKey";
-    public static final String ON_ERROR = "hibp.onError";
+    public static final String DENY_ON_FAILURE = "hibp.denyOnFailure";
 
     @Override
     public String getName() {
@@ -81,8 +78,7 @@ public class HIBPConnectorConfig implements IdentityConnectorConfig {
 
         Map<String, String> names = new LinkedHashMap<>();
         names.put(ENABLE, "Check passwords against Have I Been Pwned");
-        names.put(API_KEY, "API key");
-        names.put(ON_ERROR, "If Have I Been Pwned cannot be reached");
+        names.put(DENY_ON_FAILURE, "Refuse the password if this service cannot be reached");
 
         return names;
     }
@@ -94,11 +90,10 @@ public class HIBPConnectorConfig implements IdentityConnectorConfig {
         descriptions.put(ENABLE, "Refuse passwords that appear in the Have I Been Pwned corpus. Only a "
                 + "partial, irreversible fingerprint of the password is sent; the password itself and the "
                 + "user's identity never leave this server.");
-        descriptions.put(API_KEY, "Optional. The range endpoint needs no authentication, and leaving this "
-                + "empty does not stop passwords being checked.");
-        descriptions.put(ON_ERROR, "Whether to allow or deny a password when this service cannot answer. "
-                + "Choose deny only if you would rather block sign-ups than risk accepting a breached "
-                + "password.");
+        descriptions.put(DENY_ON_FAILURE, "Leave this off to let passwords through when the service is "
+                + "unreachable. Turn it on only if you would rather block sign-ups and password resets than "
+                + "risk accepting a breached password. An API key, if you have one, is configured by your "
+                + "deployment team.");
 
         return descriptions;
     }
@@ -106,7 +101,7 @@ public class HIBPConnectorConfig implements IdentityConnectorConfig {
     @Override
     public String[] getPropertyNames() {
 
-        return new String[] { ENABLE, API_KEY, ON_ERROR };
+        return new String[] { ENABLE, DENY_ON_FAILURE };
     }
 
     @Override
@@ -115,9 +110,8 @@ public class HIBPConnectorConfig implements IdentityConnectorConfig {
         Properties defaults = new Properties();
         // Off until an administrator asks for it.
         defaults.put(ENABLE, "false");
-        defaults.put(API_KEY, "");
         // A third party's outage should not stop every password change in the deployment.
-        defaults.put(ON_ERROR, "allow");
+        defaults.put(DENY_ON_FAILURE, "false");
 
         return defaults;
     }
@@ -138,37 +132,20 @@ public class HIBPConnectorConfig implements IdentityConnectorConfig {
         return defaults;
     }
 
-    /**
-     * The API key is a credential, so it is masked in every read of this connector's configuration. The
-     * previous version of this extension returned it in cleartext from the governance API.
-     */
-    @Override
-    public List<String> getConfidentialPropertyValues(String tenantDomain) {
-
-        List<String> confidential = new ArrayList<>();
-        confidential.add(API_KEY);
-
-        return confidential;
-    }
-
     @Override
     public Map<String, Property> getMetaData() {
 
         Map<String, Property> metadata = new LinkedHashMap<>();
 
+        // Both settings are booleans, which is also what makes the Console render them as switches: it
+        // picks a toggle when a property's value is "true" or "false", and a text box otherwise.
         Property enable = new Property();
         enable.setType("boolean");
         metadata.put(ENABLE, enable);
 
-        Property onError = new Property();
-        onError.setType("select");
-        onError.setOptions(new String[] { "allow", "deny" });
-        metadata.put(ON_ERROR, onError);
-
-        Property apiKey = new Property();
-        apiKey.setType("password");
-        apiKey.setConfidential(true);
-        metadata.put(API_KEY, apiKey);
+        Property denyOnFailure = new Property();
+        denyOnFailure.setType("boolean");
+        metadata.put(DENY_ON_FAILURE, denyOnFailure);
 
         return Collections.unmodifiableMap(metadata);
     }

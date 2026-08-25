@@ -223,7 +223,7 @@ public class HIBPBreachSource implements BreachSource {
     @Override
     public FailureAction getFailureAction(String tenantDomain) {
 
-        return "deny".equalsIgnoreCase(readProperty(tenantDomain, HIBPConnectorConfig.ON_ERROR))
+        return Boolean.parseBoolean(readProperty(tenantDomain, HIBPConnectorConfig.DENY_ON_FAILURE))
                 ? FailureAction.DENY : FailureAction.ALLOW;
     }
 
@@ -292,7 +292,6 @@ public class HIBPBreachSource implements BreachSource {
     @Override
     public BreachVerdict evaluate(BreachContext context) throws BreachSourceException {
 
-        char[] tenantKey = tenantApiKey(context.getTenantDomain());
         String digest = context.getCredential().digestHex("SHA-1");
         String prefix = digest.substring(0, 5);
         // The suffix never leaves this process.
@@ -304,7 +303,7 @@ public class HIBPBreachSource implements BreachSource {
                 return BreachVerdict.unavailable(getId(), UnavailableCause.CIRCUIT_OPEN,
                         "Calls are suspended after repeated failures.");
             }
-            suffixes = fetch(prefix, tenantKey);
+            suffixes = fetch(prefix);
             cache.put(prefix, suffixes);
         }
 
@@ -315,12 +314,12 @@ public class HIBPBreachSource implements BreachSource {
         return BreachVerdict.found(getId(), occurrences);
     }
 
-    private Map<String, Long> fetch(String prefix, char[] tenantKey) throws BreachSourceException {
+    private Map<String, Long> fetch(String prefix) throws BreachSourceException {
 
         BreachSourceException last = null;
         for (int attempt = 0; attempt <= retries; attempt++) {
             try {
-                Map<String, Long> suffixes = request(prefix, tenantKey);
+                Map<String, Long> suffixes = request(prefix);
                 breaker.recordSuccess();
                 lastSuccess.set(System.currentTimeMillis());
                 lastFailure.set(null);
@@ -340,7 +339,7 @@ public class HIBPBreachSource implements BreachSource {
                 : last;
     }
 
-    private Map<String, Long> request(String prefix, char[] tenantKey) throws BreachSourceException {
+    private Map<String, Long> request(String prefix) throws BreachSourceException {
 
         HttpURLConnection connection = null;
         try {
@@ -352,7 +351,7 @@ public class HIBPBreachSource implements BreachSource {
             connection.setRequestProperty("User-Agent", USER_AGENT);
             // Padding keeps the response size from revealing how many entries the bucket holds.
             connection.setRequestProperty("Add-Padding", "true");
-            char[] key = tenantKey != null && tenantKey.length > 0 ? tenantKey : apiKey;
+            char[] key = apiKey;
             if (key != null && key.length > 0) {
                 connection.setRequestProperty("hibp-api-key", new String(key));
             }
@@ -410,17 +409,6 @@ public class HIBPBreachSource implements BreachSource {
                     "The corpus response contained no usable entries.");
         }
         return suffixes;
-    }
-
-    /**
-     * The API key this organization configured, if any. Falls back to the deployment-level value so an
-     * operator can still set one centrally.
-     */
-    private char[] tenantApiKey(String tenantDomain) {
-
-        String configured = readProperty(tenantDomain, HIBPConnectorConfig.API_KEY);
-
-        return configured == null || configured.trim().isEmpty() ? null : configured.trim().toCharArray();
     }
 
     /**

@@ -48,16 +48,28 @@ circuit_breaker_failures = 5
 circuit_breaker_open_seconds = 60
 ```
 
-Whether the source is consulted at all is per-organization policy, set on the `breachDetection` governance
-connector under Password Policies, alongside what should happen when this source cannot be reached:
+Whether the source is consulted is this connector's own per-organization setting, published as a governance
+connector under **Password Security**. Because the connector publishes it, the setting appears in the Console
+when this bundle is installed and disappears when it is removed - no product change is involved either way.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `hibp.enable` | `false` | Consult this source for the organization. |
+| `hibp.denyOnFailure` | `false` | Refuse the password when this service cannot answer, rather than letting it through. |
 
 ```http
 PATCH /api/server/v1/identity-governance/{category}/connectors/{connector}
-{"operation":"UPDATE","properties":[
-  {"name":"breachDetection.enable",       "value":"true"},
-  {"name":"breachDetection.sources",      "value":"localList,hibp"},
-  {"name":"breachDetection.hibp.onError", "value":"allow"}]}
+{"operation":"UPDATE","properties":[{"name":"hibp.enable","value":"true"}]}
 ```
+
+Both are booleans on purpose. The Console's generic connector form picks a toggle when a property's value is
+`true` or `false` and a text box otherwise, so a setting modelled as an enumeration would make an
+administrator type `allow` or `deny` by hand.
+
+**The API key is deliberately not here.** Governance connector properties are returned in cleartext by the
+management API - we confirmed that a property marked confidential is still returned in full - so a credential
+placed there is readable by anyone who can read configuration. That is how 1.x leaked its key. The key stays
+in `deployment.toml`, resolved through the platform secret store.
 
 ## How it works
 
