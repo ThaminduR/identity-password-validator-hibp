@@ -104,16 +104,14 @@ public class HIBPConnectorConfig implements IdentityConnectorConfig {
     @Override
     public Map<String, String> getPropertyDescriptionMapping() {
 
+        // One short line each. The Console gives a property's hint the full width of the label column, so a
+        // hint that wraps runs up against the switch on the right and reads as though it belongs to the text
+        // rather than to the setting. Every shipped connector keeps these to a single line; the longer
+        // explanations live in the connector's documentation.
         Map<String, String> descriptions = new LinkedHashMap<>();
-        descriptions.put(API_KEY, "Optional. The endpoint this connector calls is free and needs no "
-                + "authentication, so leaving this empty is a supported configuration. Supply a key only if "
-                + "your organization holds one and wants its requests attributed to it.");
-        descriptions.put(ENABLE, "Refuse passwords that appear in the Have I Been Pwned corpus. Only a "
-                + "partial, irreversible fingerprint of the password is sent; the password itself and the "
-                + "user's identity never leave this server.");
-        descriptions.put(REFUSE_WHEN_UNREACHABLE, "Leave this off to let passwords through when the service is "
-                + "unreachable. Turn it on only if you would rather block sign-ups and password resets than "
-                + "risk accepting a breached password.");
+        descriptions.put(ENABLE, "Refuse passwords found in the Have I Been Pwned breach corpus.");
+        descriptions.put(API_KEY, "Optional. The endpoint this connector calls needs no key.");
+        descriptions.put(REFUSE_WHEN_UNREACHABLE, "Block password changes while the service is unreachable.");
 
         return descriptions;
     }
