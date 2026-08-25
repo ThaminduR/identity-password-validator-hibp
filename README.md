@@ -54,22 +54,38 @@ when this bundle is installed and disappears when it is removed - no product cha
 
 | Setting | Default | Meaning |
 |---|---|---|
+| `__secret__hibp.apiKey` | empty | The key to present for this organization. Optional - see below. |
 | `hibp.enable` | `false` | Consult this source for the organization. |
-| `hibp.denyOnFailure` | `false` | Refuse the password when this service cannot answer, rather than letting it through. |
+| `hibp.refuseWhenUnreachable` | `false` | Refuse the password when this service cannot answer, rather than letting it through. |
 
 ```http
 PATCH /api/server/v1/identity-governance/{category}/connectors/{connector}
 {"operation":"UPDATE","properties":[{"name":"hibp.enable","value":"true"}]}
 ```
 
-Both are booleans on purpose. The Console's generic connector form picks a toggle when a property's value is
-`true` or `false` and a text box otherwise, so a setting modelled as an enumeration would make an
-administrator type `allow` or `deny` by hand.
+The two switches are booleans on purpose. The Console's generic connector form picks a toggle when a
+property's value is `true` or `false` and a text box otherwise, so a setting modelled as an enumeration would
+make an administrator type `allow` or `deny` by hand.
 
-**The API key is deliberately not here.** Governance connector properties are returned in cleartext by the
-management API - we confirmed that a property marked confidential is still returned in full - so a credential
-placed there is readable by anyone who can read configuration. That is how 1.x leaked its key. The key stays
-in `deployment.toml`, resolved through the platform secret store.
+The API key carries the platform's `__secret__` prefix, the same convention the shipped Sift and ELK
+connectors use. That is what makes the Console render it as a password field rather than a plain text box.
+
+**A key is optional, and leaving it empty is a supported configuration** - the range endpoint this connector
+calls is free and unauthenticated. An organization's own key wins; the deployment-wide `api_key` above is the
+fallback; and with neither set the source still checks every password. A blank key silently disabling the
+check is the 1.x failure this connector exists to avoid.
+
+**Know where the key is readable.** A governance property marked confidential is still returned in full by
+`GET /identity-governance/{category}/connectors` - we confirmed this against a running server. Marking it
+confidential keeps it out of the unauthenticated preferences endpoint, and nothing more. Anyone holding
+`internal_idp_view` can read the key back. That is a property of the platform's connector API, not of this
+connector, and it applies equally to the shipped connectors that store keys the same way. If that is not
+acceptable in your deployment, put the key in `deployment.toml` behind the secret store and leave the
+per-organization field empty.
+
+Property display order is not something a connector controls: the management API returns a connector's
+properties in whatever order the database returns them, and the query carries no `ORDER BY`. The API key
+reliably renders first; the relative order of the two switches is not guaranteed.
 
 ## How it works
 
@@ -98,8 +114,7 @@ credential-write path, so it could not refuse a password being set. 2.0 replaces
 | `/hibp` servlet taking a plaintext password | Removed. Nothing here accepts a password from a caller. |
 | `[[resource.access_control]]` with `secure = false` | No longer required, and should be removed. |
 | `hibp.password.validator.*` governance connector | Replaced by `breachDetection.*`, which covers every source. |
-| API key stored as a governance property, readable over REST | Declared `secret`, vault-resolved, never returned. |
-| Blank API key reported every password as clean | The range endpoint needs no key; a missing key changes nothing. |
+| Blank API key reported every password as clean, while presenting as enabled | The range endpoint needs no key; a missing key changes nothing. |
 | No enforcement | Enforced by the product's listener on every password-setting path. |
 
 **If you are running 1.x, remove the `(.*)/hibp(.*)` access-control entry from `deployment.toml`.** While it is

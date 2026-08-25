@@ -223,8 +223,25 @@ public class HIBPBreachSource implements BreachSource {
     @Override
     public FailureAction getFailureAction(String tenantDomain) {
 
-        return Boolean.parseBoolean(readProperty(tenantDomain, HIBPConnectorConfig.DENY_ON_FAILURE))
+        return Boolean.parseBoolean(readProperty(tenantDomain, HIBPConnectorConfig.REFUSE_WHEN_UNREACHABLE))
                 ? FailureAction.DENY : FailureAction.ALLOW;
+    }
+
+    /**
+     * The key to present for this organization, or nothing if there is none to present.
+     * <p>
+     * An organization's own key wins; a deployment-wide key set in {@code deployment.toml} is the fallback.
+     * Either way a blank key is not a failure - the range endpoint is unauthenticated, and refusing to
+     * check because no key was supplied is precisely the silent no-op this connector exists to avoid.
+     */
+    private String resolveApiKey(String tenantDomain) {
+
+        String configured = readProperty(tenantDomain, HIBPConnectorConfig.API_KEY);
+        if (configured != null && !configured.trim().isEmpty()) {
+            return configured.trim();
+        }
+        char[] deploymentKey = apiKey;
+        return deploymentKey == null || deploymentKey.length == 0 ? null : new String(deploymentKey);
     }
 
     /**
@@ -303,7 +320,7 @@ public class HIBPBreachSource implements BreachSource {
                 return BreachVerdict.unavailable(getId(), UnavailableCause.CIRCUIT_OPEN,
                         "Calls are suspended after repeated failures.");
             }
-            suffixes = fetch(prefix);
+            suffixes = fetch(prefix, resolveApiKey(context.getTenantDomain()));
             cache.put(prefix, suffixes);
         }
 
@@ -314,12 +331,12 @@ public class HIBPBreachSource implements BreachSource {
         return BreachVerdict.found(getId(), occurrences);
     }
 
-    private Map<String, Long> fetch(String prefix) throws BreachSourceException {
+    private Map<String, Long> fetch(String prefix, String key) throws BreachSourceException {
 
         BreachSourceException last = null;
         for (int attempt = 0; attempt <= retries; attempt++) {
             try {
-                Map<String, Long> suffixes = request(prefix);
+                Map<String, Long> suffixes = request(prefix, key);
                 breaker.recordSuccess();
                 lastSuccess.set(System.currentTimeMillis());
                 lastFailure.set(null);
@@ -339,7 +356,7 @@ public class HIBPBreachSource implements BreachSource {
                 : last;
     }
 
-    private Map<String, Long> request(String prefix) throws BreachSourceException {
+    private Map<String, Long> request(String prefix, String key) throws BreachSourceException {
 
         HttpURLConnection connection = null;
         try {
@@ -351,9 +368,8 @@ public class HIBPBreachSource implements BreachSource {
             connection.setRequestProperty("User-Agent", USER_AGENT);
             // Padding keeps the response size from revealing how many entries the bucket holds.
             connection.setRequestProperty("Add-Padding", "true");
-            char[] key = apiKey;
-            if (key != null && key.length > 0) {
-                connection.setRequestProperty("hibp-api-key", new String(key));
+            if (key != null) {
+                connection.setRequestProperty("hibp-api-key", key);
             }
 
             int status = connection.getResponseCode();

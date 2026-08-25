@@ -20,11 +20,13 @@ package org.wso2.identity.password.validator.hibp;
 
 import org.wso2.carbon.identity.application.common.model.Property;
 import org.wso2.carbon.identity.governance.IdentityGovernanceException;
+import org.wso2.carbon.identity.governance.IdentityMgtConstants;
 import org.wso2.carbon.identity.governance.common.IdentityConnectorConfig;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -40,8 +42,14 @@ public class HIBPConnectorConfig implements IdentityConnectorConfig {
     public static final String CONNECTOR_NAME = "hibp";
     public static final String CATEGORY = "Password Security";
 
+    /**
+     * The {@code __secret__} prefix is the platform's marker for a credential in connector configuration.
+     * It is what makes the Console render this as a password field rather than a plain text box, and it is
+     * the same convention the shipped Sift and ELK connectors use for their own keys.
+     */
+    public static final String API_KEY = "__secret__hibp.apiKey";
     public static final String ENABLE = "hibp.enable";
-    public static final String DENY_ON_FAILURE = "hibp.denyOnFailure";
+    public static final String REFUSE_WHEN_UNREACHABLE = "hibp.refuseWhenUnreachable";
 
     @Override
     public String getName() {
@@ -77,8 +85,9 @@ public class HIBPConnectorConfig implements IdentityConnectorConfig {
     public Map<String, String> getPropertyNameMapping() {
 
         Map<String, String> names = new LinkedHashMap<>();
+        names.put(API_KEY, "API key");
         names.put(ENABLE, "Check passwords against Have I Been Pwned");
-        names.put(DENY_ON_FAILURE, "Refuse the password if this service cannot be reached");
+        names.put(REFUSE_WHEN_UNREACHABLE, "Refuse the password if this service cannot be reached");
 
         return names;
     }
@@ -87,13 +96,15 @@ public class HIBPConnectorConfig implements IdentityConnectorConfig {
     public Map<String, String> getPropertyDescriptionMapping() {
 
         Map<String, String> descriptions = new LinkedHashMap<>();
+        descriptions.put(API_KEY, "Optional. The endpoint this connector calls is free and needs no "
+                + "authentication, so leaving this empty is a supported configuration. Supply a key only if "
+                + "your organization holds one and wants its requests attributed to it.");
         descriptions.put(ENABLE, "Refuse passwords that appear in the Have I Been Pwned corpus. Only a "
                 + "partial, irreversible fingerprint of the password is sent; the password itself and the "
                 + "user's identity never leave this server.");
-        descriptions.put(DENY_ON_FAILURE, "Leave this off to let passwords through when the service is "
+        descriptions.put(REFUSE_WHEN_UNREACHABLE, "Leave this off to let passwords through when the service is "
                 + "unreachable. Turn it on only if you would rather block sign-ups and password resets than "
-                + "risk accepting a breached password. An API key, if you have one, is configured by your "
-                + "deployment team.");
+                + "risk accepting a breached password.");
 
         return descriptions;
     }
@@ -101,17 +112,24 @@ public class HIBPConnectorConfig implements IdentityConnectorConfig {
     @Override
     public String[] getPropertyNames() {
 
-        return new String[] { ENABLE, DENY_ON_FAILURE };
+        // This order is for readers of this file, not for the Console. The server returns a connector's
+        // properties in whatever order the database hands them back - the query has no ORDER BY - which in
+        // practice is the unique index on (IDP_ID, NAME), so the rendered order follows the property names.
+        // That is why the names below read in the order an administrator should meet them.
+        return new String[] { API_KEY, ENABLE, REFUSE_WHEN_UNREACHABLE };
     }
 
     @Override
     public Properties getDefaultPropertyValues(String tenantDomain) throws IdentityGovernanceException {
 
         Properties defaults = new Properties();
+        // No key. The range endpoint is unauthenticated, and a missing key must never be read as a reason
+        // to stop checking.
+        defaults.put(API_KEY, "");
         // Off until an administrator asks for it.
         defaults.put(ENABLE, "false");
         // A third party's outage should not stop every password change in the deployment.
-        defaults.put(DENY_ON_FAILURE, "false");
+        defaults.put(REFUSE_WHEN_UNREACHABLE, "false");
 
         return defaults;
     }
@@ -133,19 +151,29 @@ public class HIBPConnectorConfig implements IdentityConnectorConfig {
     }
 
     @Override
+    public List<String> getConfidentialPropertyValues(String tenantDomain) {
+
+        return Collections.singletonList(API_KEY);
+    }
+
+    @Override
     public Map<String, Property> getMetaData() {
 
         Map<String, Property> metadata = new LinkedHashMap<>();
 
-        // Both settings are booleans, which is also what makes the Console render them as switches: it
-        // picks a toggle when a property's value is "true" or "false", and a text box otherwise.
+        Property apiKey = new Property();
+        apiKey.setType(IdentityMgtConstants.DataTypes.STRING.getValue());
+        metadata.put(API_KEY, apiKey);
+
+        // A boolean is also what makes the Console render a switch: it picks a toggle when a property's
+        // value is "true" or "false", and a text box otherwise.
         Property enable = new Property();
-        enable.setType("boolean");
+        enable.setType(IdentityMgtConstants.DataTypes.BOOLEAN.getValue());
         metadata.put(ENABLE, enable);
 
-        Property denyOnFailure = new Property();
-        denyOnFailure.setType("boolean");
-        metadata.put(DENY_ON_FAILURE, denyOnFailure);
+        Property refuseWhenUnreachable = new Property();
+        refuseWhenUnreachable.setType(IdentityMgtConstants.DataTypes.BOOLEAN.getValue());
+        metadata.put(REFUSE_WHEN_UNREACHABLE, refuseWhenUnreachable);
 
         return Collections.unmodifiableMap(metadata);
     }
