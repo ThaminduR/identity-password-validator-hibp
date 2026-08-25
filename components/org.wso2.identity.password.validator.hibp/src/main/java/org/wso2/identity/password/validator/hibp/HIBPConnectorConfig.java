@@ -39,7 +39,16 @@ import java.util.Properties;
  */
 public class HIBPConnectorConfig implements IdentityConnectorConfig {
 
-    public static final String CONNECTOR_NAME = "hibp";
+    /**
+     * Deliberately not "hibp", and not a prefix of any property name below.
+     * <p>
+     * When a connector's name is a prefix of its property names, the management API stops honouring the
+     * declared property order: it collects every same-prefixed property on the first pass, in the arbitrary
+     * order the platform's property map yields. Keeping the name distinct from the property namespace means
+     * each property is matched on its own pass, and {@link #getPropertyNames()} decides what an administrator
+     * sees first.
+     */
+    public static final String CONNECTOR_NAME = "have-i-been-pwned";
     public static final String CATEGORY = "Password Security";
 
     /**
@@ -86,7 +95,7 @@ public class HIBPConnectorConfig implements IdentityConnectorConfig {
 
         Map<String, String> names = new LinkedHashMap<>();
         names.put(API_KEY, "API key");
-        names.put(ENABLE, "Check passwords against Have I Been Pwned");
+        names.put(ENABLE, "Enable");
         names.put(REFUSE_WHEN_UNREACHABLE, "Refuse the password if this service cannot be reached");
 
         return names;
@@ -112,11 +121,8 @@ public class HIBPConnectorConfig implements IdentityConnectorConfig {
     @Override
     public String[] getPropertyNames() {
 
-        // This order is for readers of this file, not for the Console. The server returns a connector's
-        // properties in whatever order the database hands them back - the query has no ORDER BY - which in
-        // practice is the unique index on (IDP_ID, NAME), so the rendered order follows the property names.
-        // That is why the names below read in the order an administrator should meet them.
-        return new String[] { API_KEY, ENABLE, REFUSE_WHEN_UNREACHABLE };
+        // This is the order the Console renders. See CONNECTOR_NAME for why it is honoured at all.
+        return new String[] { ENABLE, API_KEY, REFUSE_WHEN_UNREACHABLE };
     }
 
     @Override

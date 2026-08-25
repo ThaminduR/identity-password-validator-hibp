@@ -54,8 +54,8 @@ when this bundle is installed and disappears when it is removed - no product cha
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `__secret__hibp.apiKey` | empty | The key to present for this organization. Optional - see below. |
 | `hibp.enable` | `false` | Consult this source for the organization. |
+| `__secret__hibp.apiKey` | empty | The key to present for this organization. Optional - see below. |
 | `hibp.refuseWhenUnreachable` | `false` | Refuse the password when this service cannot answer, rather than letting it through. |
 
 ```http
@@ -83,9 +83,12 @@ connector, and it applies equally to the shipped connectors that store keys the 
 acceptable in your deployment, put the key in `deployment.toml` behind the secret store and leave the
 per-organization field empty.
 
-Property display order is not something a connector controls: the management API returns a connector's
-properties in whatever order the database returns them, and the query carries no `ORDER BY`. The API key
-reliably renders first; the relative order of the two switches is not guaranteed.
+The Console renders these in the order above, and that is why the connector is named `have-i-been-pwned`
+rather than `hibp`. When a connector's name is a prefix of its property names, `getConnectorListWithConfigs`
+matches every same-prefixed property on the first pass and emits them in the order the platform's property
+map happens to yield - a `HashMap` keyed by property name, so the order is arbitrary and shifts as other
+connectors are installed. Keeping the connector name outside the property namespace means each property is
+matched on its own pass and `getPropertyNames()` decides the order.
 
 ## How it works
 
