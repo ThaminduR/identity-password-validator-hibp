@@ -25,12 +25,15 @@ import org.wso2.carbon.identity.breach.source.BreachSource;
 import org.wso2.carbon.identity.breach.source.BreachSourceException;
 import org.wso2.carbon.identity.breach.source.BreachVerdict;
 import org.wso2.carbon.identity.breach.source.Capability;
+import org.wso2.carbon.identity.application.common.model.Property;
 import org.wso2.carbon.identity.breach.source.Descriptor;
+import org.wso2.carbon.identity.breach.source.FailureAction;
 import org.wso2.carbon.identity.breach.source.PropertyDescriptor;
 import org.wso2.carbon.identity.breach.source.PropertyType;
 import org.wso2.carbon.identity.breach.source.SourceConfiguration;
 import org.wso2.carbon.identity.breach.source.SourceStatus;
 import org.wso2.carbon.identity.breach.source.UnavailableCause;
+import org.wso2.identity.password.validator.hibp.internal.HIBPDataHolder;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -207,6 +210,51 @@ public class HIBPBreachSource implements BreachSource {
                 + readTimeoutMs + " ms, apiKey=" + (apiKey == null ? "not set" : "set") + ".");
     }
 
+    /**
+     * Whether this organization asked for this source. The answer lives in this connector's own governance
+     * configuration, which is also what an administrator edits in the Console.
+     */
+    @Override
+    public boolean isEnabled(String tenantDomain) {
+
+        return Boolean.parseBoolean(readProperty(tenantDomain, HIBPConnectorConfig.ENABLE));
+    }
+
+    @Override
+    public FailureAction getFailureAction(String tenantDomain) {
+
+        return "deny".equalsIgnoreCase(readProperty(tenantDomain, HIBPConnectorConfig.ON_ERROR))
+                ? FailureAction.DENY : FailureAction.ALLOW;
+    }
+
+    /**
+     * Read one of this connector's own settings for an organization. A store that cannot be read yields
+     * nothing rather than an assumption, so the source stays off instead of guessing that it is on.
+     */
+    private String readProperty(String tenantDomain, String name) {
+
+        try {
+            if (HIBPDataHolder.getInstance().getIdentityGovernanceService() == null) {
+                return null;
+            }
+            Property[] properties = HIBPDataHolder.getInstance().getIdentityGovernanceService()
+                    .getConfiguration(new String[] { name }, tenantDomain);
+            if (properties == null) {
+                return null;
+            }
+            for (Property property : properties) {
+                if (property != null && name.equals(property.getName())) {
+                    return property.getValue();
+                }
+            }
+        } catch (Exception e) {
+            LOG.error("Could not read the Have I Been Pwned configuration for tenant '" + tenantDomain
+                    + "'. The source will not be consulted.", e);
+        }
+
+        return null;
+    }
+
     @Override
     public boolean isConfigured(String tenantDomain) {
 
@@ -244,6 +292,7 @@ public class HIBPBreachSource implements BreachSource {
     @Override
     public BreachVerdict evaluate(BreachContext context) throws BreachSourceException {
 
+        char[] tenantKey = tenantApiKey(context.getTenantDomain());
         String digest = context.getCredential().digestHex("SHA-1");
         String prefix = digest.substring(0, 5);
         // The suffix never leaves this process.
@@ -255,7 +304,7 @@ public class HIBPBreachSource implements BreachSource {
                 return BreachVerdict.unavailable(getId(), UnavailableCause.CIRCUIT_OPEN,
                         "Calls are suspended after repeated failures.");
             }
-            suffixes = fetch(prefix);
+            suffixes = fetch(prefix, tenantKey);
             cache.put(prefix, suffixes);
         }
 
@@ -266,12 +315,12 @@ public class HIBPBreachSource implements BreachSource {
         return BreachVerdict.found(getId(), occurrences);
     }
 
-    private Map<String, Long> fetch(String prefix) throws BreachSourceException {
+    private Map<String, Long> fetch(String prefix, char[] tenantKey) throws BreachSourceException {
 
         BreachSourceException last = null;
         for (int attempt = 0; attempt <= retries; attempt++) {
             try {
-                Map<String, Long> suffixes = request(prefix);
+                Map<String, Long> suffixes = request(prefix, tenantKey);
                 breaker.recordSuccess();
                 lastSuccess.set(System.currentTimeMillis());
                 lastFailure.set(null);
@@ -291,7 +340,7 @@ public class HIBPBreachSource implements BreachSource {
                 : last;
     }
 
-    private Map<String, Long> request(String prefix) throws BreachSourceException {
+    private Map<String, Long> request(String prefix, char[] tenantKey) throws BreachSourceException {
 
         HttpURLConnection connection = null;
         try {
@@ -303,7 +352,7 @@ public class HIBPBreachSource implements BreachSource {
             connection.setRequestProperty("User-Agent", USER_AGENT);
             // Padding keeps the response size from revealing how many entries the bucket holds.
             connection.setRequestProperty("Add-Padding", "true");
-            char[] key = apiKey;
+            char[] key = tenantKey != null && tenantKey.length > 0 ? tenantKey : apiKey;
             if (key != null && key.length > 0) {
                 connection.setRequestProperty("hibp-api-key", new String(key));
             }
@@ -361,6 +410,17 @@ public class HIBPBreachSource implements BreachSource {
                     "The corpus response contained no usable entries.");
         }
         return suffixes;
+    }
+
+    /**
+     * The API key this organization configured, if any. Falls back to the deployment-level value so an
+     * operator can still set one centrally.
+     */
+    private char[] tenantApiKey(String tenantDomain) {
+
+        String configured = readProperty(tenantDomain, HIBPConnectorConfig.API_KEY);
+
+        return configured == null || configured.trim().isEmpty() ? null : configured.trim().toCharArray();
     }
 
     /**

@@ -26,7 +26,13 @@ import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Deactivate;
 import org.wso2.identity.password.validator.hibp.HIBPBreachSource;
+import org.osgi.service.component.annotations.Reference;
+import org.osgi.service.component.annotations.ReferenceCardinality;
+import org.osgi.service.component.annotations.ReferencePolicy;
 import org.wso2.carbon.identity.breach.source.BreachSource;
+import org.wso2.carbon.identity.governance.IdentityGovernanceService;
+import org.wso2.carbon.identity.governance.common.IdentityConnectorConfig;
+import org.wso2.identity.password.validator.hibp.HIBPConnectorConfig;
 
 /**
  * Publishes the source. That is the whole of the connector's integration with the product: one service
@@ -41,6 +47,7 @@ public class HIBPServiceComponent {
     private static final Log LOG = LogFactory.getLog(HIBPServiceComponent.class);
 
     private ServiceRegistration<BreachSource> registration;
+    private ServiceRegistration<IdentityConnectorConfig> connectorRegistration;
     private HIBPBreachSource source;
 
     @Activate
@@ -48,12 +55,20 @@ public class HIBPServiceComponent {
 
         source = new HIBPBreachSource();
         registration = context.getBundleContext().registerService(BreachSource.class, source, null);
+        // Publishing this is what gives the connector its own per-organization settings and its Console
+        // presence. Both go away with the bundle.
+        connectorRegistration = context.getBundleContext()
+                .registerService(IdentityConnectorConfig.class, new HIBPConnectorConfig(), null);
         LOG.info("The Have I Been Pwned breach source connector is registered.");
     }
 
     @Deactivate
     protected void deactivate(ComponentContext context) {
 
+        if (connectorRegistration != null) {
+            connectorRegistration.unregister();
+            connectorRegistration = null;
+        }
         if (registration != null) {
             registration.unregister();
             registration = null;
@@ -63,5 +78,22 @@ public class HIBPServiceComponent {
             source = null;
         }
         LOG.info("The Have I Been Pwned breach source connector is unregistered.");
+    }
+
+    @Reference(
+            name = "identity.governance.service",
+            service = IdentityGovernanceService.class,
+            cardinality = ReferenceCardinality.MANDATORY,
+            policy = ReferencePolicy.DYNAMIC,
+            unbind = "unsetIdentityGovernanceService"
+    )
+    protected void setIdentityGovernanceService(IdentityGovernanceService service) {
+
+        HIBPDataHolder.getInstance().setIdentityGovernanceService(service);
+    }
+
+    protected void unsetIdentityGovernanceService(IdentityGovernanceService service) {
+
+        HIBPDataHolder.getInstance().setIdentityGovernanceService(null);
     }
 }
