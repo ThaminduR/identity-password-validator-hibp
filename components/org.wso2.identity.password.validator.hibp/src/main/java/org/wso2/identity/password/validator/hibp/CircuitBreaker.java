@@ -71,9 +71,4 @@ class CircuitBreaker {
             openedAt.compareAndSet(0, System.currentTimeMillis());
         }
     }
-
-    long getOpenedAt() {
-
-        return openedAt.get();
-    }
 }

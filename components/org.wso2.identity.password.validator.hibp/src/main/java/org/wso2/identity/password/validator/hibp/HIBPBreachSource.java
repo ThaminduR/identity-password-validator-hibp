@@ -24,14 +24,10 @@ import org.wso2.carbon.identity.breach.source.BreachContext;
 import org.wso2.carbon.identity.breach.source.BreachSource;
 import org.wso2.carbon.identity.breach.source.BreachSourceException;
 import org.wso2.carbon.identity.breach.source.BreachVerdict;
-import org.wso2.carbon.identity.breach.source.Capability;
 import org.wso2.carbon.identity.application.common.model.Property;
-import org.wso2.carbon.identity.breach.source.Descriptor;
 import org.wso2.carbon.identity.breach.source.FailureAction;
 import org.wso2.carbon.identity.breach.source.PropertyDescriptor;
-import org.wso2.carbon.identity.breach.source.PropertyType;
 import org.wso2.carbon.identity.breach.source.SourceConfiguration;
-import org.wso2.carbon.identity.breach.source.SourceStatus;
 import org.wso2.carbon.identity.breach.source.UnavailableCause;
 import org.wso2.identity.password.validator.hibp.internal.HIBPDataHolder;
 
@@ -43,17 +39,11 @@ import java.net.HttpURLConnection;
 import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.text.SimpleDateFormat;
 import java.util.Arrays;
-import java.util.Date;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.TimeZone;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Checks a candidate against the Have I Been Pwned corpus, without the corpus ever learning the password.
@@ -98,7 +88,7 @@ public class HIBPBreachSource implements BreachSource {
     private static final String USER_AGENT = "WSO2-Identity-Server-Breach-Detection";
 
     private volatile String baseUrl = DEFAULT_BASE_URL;
-    private volatile char[] apiKey;
+    private volatile String deploymentApiKey;
     private volatile int readTimeoutMs = DEFAULT_READ_TIMEOUT_MS;
     private volatile int connectTimeoutMs = DEFAULT_CONNECT_TIMEOUT_MS;
     private volatile int retries = DEFAULT_RETRIES;
@@ -107,8 +97,6 @@ public class HIBPBreachSource implements BreachSource {
     private volatile CircuitBreaker breaker = new CircuitBreaker(DEFAULT_BREAKER_THRESHOLD,
             DEFAULT_BREAKER_OPEN_SECONDS * 1000L);
 
-    private final AtomicLong lastSuccess = new AtomicLong();
-    private final AtomicReference<String> lastFailure = new AtomicReference<>();
 
     @Override
     public String getId() {
@@ -116,60 +104,38 @@ public class HIBPBreachSource implements BreachSource {
         return SOURCE_ID;
     }
 
-    @Override
-    public Descriptor getDescriptor() {
-
-        return Descriptor.builder("Have I Been Pwned")
-                .description("Checks against a continuously updated public breach corpus.")
-                .privacyNotice("Sends only a partial, irreversible fingerprint of the password. "
-                        + "The password itself, and the user's identity, never leave this server.")
-                .vendor("Have I Been Pwned")
-                .documentationUrl("https://haveibeenpwned.com/API/v3#PwnedPasswords")
-                .build();
-    }
 
     @Override
     public List<PropertyDescriptor> getProperties() {
 
         return Arrays.asList(
-                PropertyDescriptor.builder(PROPERTY_API_KEY, PropertyType.STRING)
+                PropertyDescriptor.builder(PROPERTY_API_KEY)
                         .secret(true)
                         .required(false)
-                        .displayName("API key")
-                        .description("Optional. The range endpoint needs no authentication, and a missing key "
-                                + "is never a reason to stop checking.")
                         .build(),
-                PropertyDescriptor.builder(PROPERTY_BASE_URL, PropertyType.STRING)
+                PropertyDescriptor.builder(PROPERTY_BASE_URL)
                         .defaultValue(DEFAULT_BASE_URL)
-                        .displayName("Range endpoint")
                         .build(),
-                PropertyDescriptor.builder(PROPERTY_READ_TIMEOUT_MS, PropertyType.DURATION_MS)
+                PropertyDescriptor.builder(PROPERTY_READ_TIMEOUT_MS)
                         .defaultValue(String.valueOf(DEFAULT_READ_TIMEOUT_MS))
-                        .displayName("Read timeout")
                         .build(),
-                PropertyDescriptor.builder(PROPERTY_CONNECT_TIMEOUT_MS, PropertyType.DURATION_MS)
+                PropertyDescriptor.builder(PROPERTY_CONNECT_TIMEOUT_MS)
                         .defaultValue(String.valueOf(DEFAULT_CONNECT_TIMEOUT_MS))
-                        .displayName("Connect timeout")
                         .build(),
-                PropertyDescriptor.builder(PROPERTY_CACHE_TTL_SECONDS, PropertyType.INTEGER)
+                PropertyDescriptor.builder(PROPERTY_CACHE_TTL_SECONDS)
                         .defaultValue(String.valueOf(DEFAULT_CACHE_TTL_SECONDS))
-                        .displayName("Prefix cache lifetime (seconds)")
                         .build(),
-                PropertyDescriptor.builder(PROPERTY_CACHE_MAX_ENTRIES, PropertyType.INTEGER)
+                PropertyDescriptor.builder(PROPERTY_CACHE_MAX_ENTRIES)
                         .defaultValue(String.valueOf(DEFAULT_CACHE_MAX_ENTRIES))
-                        .displayName("Prefix cache size")
                         .build(),
-                PropertyDescriptor.builder(PROPERTY_RETRIES, PropertyType.INTEGER)
+                PropertyDescriptor.builder(PROPERTY_RETRIES)
                         .defaultValue(String.valueOf(DEFAULT_RETRIES))
-                        .displayName("Retries")
                         .build(),
-                PropertyDescriptor.builder(PROPERTY_BREAKER_THRESHOLD, PropertyType.INTEGER)
+                PropertyDescriptor.builder(PROPERTY_BREAKER_THRESHOLD)
                         .defaultValue(String.valueOf(DEFAULT_BREAKER_THRESHOLD))
-                        .displayName("Failures before the circuit opens")
                         .build(),
-                PropertyDescriptor.builder(PROPERTY_BREAKER_OPEN_SECONDS, PropertyType.INTEGER)
+                PropertyDescriptor.builder(PROPERTY_BREAKER_OPEN_SECONDS)
                         .defaultValue(String.valueOf(DEFAULT_BREAKER_OPEN_SECONDS))
-                        .displayName("Seconds the circuit stays open")
                         .build());
     }
 
@@ -180,11 +146,6 @@ public class HIBPBreachSource implements BreachSource {
         return 500;
     }
 
-    @Override
-    public EnumSet<Capability> getCapabilities() {
-
-        return EnumSet.of(Capability.REMOTE, Capability.PASSWORD_ONLY);
-    }
 
     @Override
     public void configure(SourceConfiguration configuration) {
@@ -194,11 +155,7 @@ public class HIBPBreachSource implements BreachSource {
         this.connectTimeoutMs = configuration.getInt(PROPERTY_CONNECT_TIMEOUT_MS, DEFAULT_CONNECT_TIMEOUT_MS);
         this.retries = Math.max(0, configuration.getInt(PROPERTY_RETRIES, DEFAULT_RETRIES));
 
-        char[] previous = this.apiKey;
-        this.apiKey = configuration.getSecret(PROPERTY_API_KEY).orElse(null);
-        if (previous != null) {
-            Arrays.fill(previous, '\0');
-        }
+        this.deploymentApiKey = readSecret(configuration, PROPERTY_API_KEY);
 
         this.cache = new PrefixCache(configuration.getInt(PROPERTY_CACHE_MAX_ENTRIES, DEFAULT_CACHE_MAX_ENTRIES),
                 configuration.getLong(PROPERTY_CACHE_TTL_SECONDS, DEFAULT_CACHE_TTL_SECONDS) * 1000L);
@@ -207,7 +164,7 @@ public class HIBPBreachSource implements BreachSource {
                 configuration.getLong(PROPERTY_BREAKER_OPEN_SECONDS, DEFAULT_BREAKER_OPEN_SECONDS) * 1000L);
 
         LOG.info("The Have I Been Pwned connector was configured: endpoint=" + baseUrl + ", readTimeout="
-                + readTimeoutMs + " ms, apiKey=" + (apiKey == null ? "not set" : "set") + ".");
+                + readTimeoutMs + " ms, apiKey=" + (deploymentApiKey == null ? "not set" : "set") + ".");
     }
 
     /**
@@ -237,11 +194,24 @@ public class HIBPBreachSource implements BreachSource {
     private String resolveApiKey(String tenantDomain) {
 
         String configured = normalizeApiKey(readProperty(tenantDomain, HIBPConnectorConfig.API_KEY));
-        if (configured != null) {
-            return configured;
+        return configured == null ? deploymentApiKey : configured;
+    }
+
+    /**
+     * Take a declared secret from the core and wipe the array the SPI handed over: the caller owns it, and
+     * leaving it live would keep the key readable in a heap dump for the lifetime of the bundle.
+     */
+    private static String readSecret(SourceConfiguration configuration, String name) {
+
+        char[] secret = configuration.getSecret(name).orElse(null);
+        if (secret == null) {
+            return null;
         }
-        char[] deploymentKey = apiKey;
-        return deploymentKey == null ? null : normalizeApiKey(new String(deploymentKey));
+        try {
+            return normalizeApiKey(new String(secret));
+        } finally {
+            Arrays.fill(secret, '\0');
+        }
     }
 
     /**
@@ -298,31 +268,6 @@ public class HIBPBreachSource implements BreachSource {
         return baseUrl != null && !baseUrl.trim().isEmpty();
     }
 
-    @Override
-    public SourceStatus getStatus(String tenantDomain) {
-
-        long success = lastSuccess.get();
-        String failure = lastFailure.get();
-        SourceStatus.Builder builder = SourceStatus.builder(
-                        breaker.isOpen() || (success == 0 && failure != null)
-                                ? SourceStatus.State.UNAVAILABLE : SourceStatus.State.READY)
-                .lastSuccess(success == 0 ? null : success);
-        if (success > 0) {
-            builder.fact("LAST SUCCESS", formatTimestamp(success));
-        }
-        if (failure != null) {
-            builder.fact("FAILING WITH", failure);
-        }
-        int ratio = cache.getHitRatioPercent();
-        if (ratio >= 0) {
-            builder.fact("CACHE HITS", ratio + "%");
-        }
-        builder.fact("CACHED PREFIXES", String.valueOf(cache.size()));
-        if (breaker.isOpen()) {
-            builder.summary("Repeated failures have suspended calls to this source.");
-        }
-        return builder.build();
-    }
 
     @Override
     public BreachVerdict evaluate(BreachContext context) throws BreachSourceException {
@@ -342,11 +287,7 @@ public class HIBPBreachSource implements BreachSource {
             cache.put(prefix, suffixes);
         }
 
-        Long occurrences = suffixes.get(suffix);
-        if (occurrences == null) {
-            return BreachVerdict.notFound(getId());
-        }
-        return BreachVerdict.found(getId(), occurrences);
+        return suffixes.containsKey(suffix) ? BreachVerdict.found(getId()) : BreachVerdict.notFound(getId());
     }
 
     private Map<String, Long> fetch(String prefix, String key) throws BreachSourceException {
@@ -356,8 +297,6 @@ public class HIBPBreachSource implements BreachSource {
             try {
                 Map<String, Long> suffixes = request(prefix, key);
                 breaker.recordSuccess();
-                lastSuccess.set(System.currentTimeMillis());
-                lastFailure.set(null);
                 return suffixes;
             } catch (BreachSourceException e) {
                 last = e;
@@ -368,7 +307,6 @@ public class HIBPBreachSource implements BreachSource {
             }
         }
         breaker.recordFailure();
-        lastFailure.set(last == null ? "unknown failure" : last.getMessage());
         throw last == null
                 ? new BreachSourceException(UnavailableCause.TRANSPORT, "The corpus could not be reached.")
                 : last;
@@ -446,22 +384,12 @@ public class HIBPBreachSource implements BreachSource {
     }
 
     /**
-     * Release the API key. Called when the connector bundle stops.
+     * Drop the API key and the cached ranges. Called when the connector bundle stops.
      */
     public void shutdown() {
 
-        char[] key = apiKey;
-        apiKey = null;
-        if (key != null) {
-            Arrays.fill(key, '\0');
-        }
+        deploymentApiKey = null;
         cache.clear();
     }
 
-    private static String formatTimestamp(long epochMillis) {
-
-        SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd HH:mm 'UTC'", Locale.ROOT);
-        format.setTimeZone(TimeZone.getTimeZone("UTC"));
-        return format.format(new Date(epochMillis));
-    }
 }

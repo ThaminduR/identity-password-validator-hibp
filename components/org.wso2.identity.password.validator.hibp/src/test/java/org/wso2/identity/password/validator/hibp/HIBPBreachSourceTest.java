@@ -26,9 +26,7 @@ import org.testng.annotations.Test;
 import org.wso2.carbon.identity.breach.source.BreachContext;
 import org.wso2.carbon.identity.breach.source.BreachSourceException;
 import org.wso2.carbon.identity.breach.source.BreachVerdict;
-import org.wso2.carbon.identity.breach.source.Capability;
 import org.wso2.carbon.identity.breach.source.Credential;
-import org.wso2.carbon.identity.breach.source.Operation;
 import org.wso2.carbon.identity.breach.source.Outcome;
 import org.wso2.carbon.identity.breach.source.SourceConfiguration;
 import org.wso2.carbon.identity.breach.source.UnavailableCause;
@@ -48,7 +46,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertNotNull;
 import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
@@ -97,12 +94,6 @@ public class HIBPBreachSourceTest {
         assertEquals(source().evaluate(context(BREACHED)).getOutcome(), Outcome.FOUND);
     }
 
-    @Test
-    public void reportsTheOccurrenceCountForTelemetryAndTheAdministratorSurface() throws Exception {
-
-        BreachVerdict verdict = source().evaluate(context(BREACHED));
-        assertEquals(verdict.getOccurrences().getAsLong(), 612953L);
-    }
 
     @Test
     public void acceptsAPasswordAbsentFromTheCorpus() throws Exception {
@@ -199,15 +190,16 @@ public class HIBPBreachSourceTest {
         assertTrue(source.isConfigured(TENANT));
     }
 
+    /**
+     * Not offline, so the engine bounds the call on a worker thread rather than running it inline.
+     */
     @Test
-    public void itDeclaresItselfRemoteAndPasswordOnly() {
+    public void itDeclaresItselfRemoteSoTheEngineBoundsIt() {
 
         HIBPBreachSource source = new HIBPBreachSource();
-        assertTrue(source.getCapabilities().contains(Capability.REMOTE));
-        assertTrue(source.getCapabilities().contains(Capability.PASSWORD_ONLY));
-        assertFalse(source.getCapabilities().contains(Capability.NEEDS_SUBJECT));
+        assertFalse(source.isOffline());
         assertEquals(source.getId(), "hibp");
-        assertNotNull(source.getDescriptor().getPrivacyNotice().orElse(null));
+        assertTrue(source.getPriority() > 100);
     }
 
     @Test
@@ -271,7 +263,6 @@ public class HIBPBreachSourceTest {
         return BreachContext.builder()
                 .credential(new Credential(password.toCharArray()))
                 .tenantDomain(TENANT)
-                .operation(Operation.REGISTER)
                 .build();
     }
 
