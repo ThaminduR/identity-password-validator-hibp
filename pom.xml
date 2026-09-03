@@ -52,10 +52,21 @@
     </distributionManagement>
 
     <dependencies>
+        <!--
+          Only the breach source contract is needed to compile, and at runtime OSGi wires the package from
+          the deployed bundle. The transitive tree is excluded so this connector does not inherit the
+          framework, registry and Tomcat dependencies that the detection bundle itself builds against.
+        -->
         <dependency>
             <groupId>org.wso2.carbon.identity.breach</groupId>
-            <artifactId>org.wso2.carbon.identity.breach.detection.api</artifactId>
+            <artifactId>org.wso2.carbon.identity.breach.detection</artifactId>
             <version>${identity.breach.detection.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>*</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.felix</groupId>
