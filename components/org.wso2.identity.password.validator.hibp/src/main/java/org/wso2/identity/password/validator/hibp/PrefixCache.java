@@ -23,11 +23,11 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * The one thing in this connector worth caching: the range response for a five-character prefix.
+ * Caches the range response for a five-character prefix. The response is stable for hours and shared by every
+ * password in the bucket.
  * <p>
- * That response is stable over hours and is shared by every password in the bucket, so caching it saves a round
- * trip without narrowing anything. The candidate password and its full digest are never cache keys and never
- * cache values - a cache keyed on the digest would be a password store.
+ * The candidate password and its full digest are never keys or values. A cache keyed on the digest would be a
+ * password store.
  */
 class PrefixCache {
 

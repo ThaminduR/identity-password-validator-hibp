@@ -46,15 +46,10 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Checks a candidate against the Have I Been Pwned corpus, without the corpus ever learning the password.
+ * Checks a candidate against the Have I Been Pwned corpus without sending the password. Five characters of
+ * the SHA-1 digest are sent, the service returns every suffix sharing that prefix, and the match is made here.
  * <p>
- * The digest is split: five characters go out, thirty-five stay. The service returns every suffix in that
- * bucket - roughly eight hundred of them - and the match happens here. It therefore learns only that someone in
- * this deployment tested a password in a bucket of that size, and never the answer to its own query.
- * <p>
- * This is a connector, not a core component: separately built, separately released, dropped into
- * {@code dropins}, and removable without touching anything in the core. It is also the reference implementation
- * the SPI is documented against.
+ * The reference implementation of the SPI, released separately from the core.
  */
 public class HIBPBreachSource implements BreachSource {
 
@@ -185,11 +180,8 @@ public class HIBPBreachSource implements BreachSource {
     }
 
     /**
-     * The key to present for this organization, or nothing if there is none to present.
-     * <p>
-     * An organization's own key wins; a deployment-wide key set in {@code deployment.toml} is the fallback.
-     * Either way a blank key is not a failure - the range endpoint is unauthenticated, and refusing to
-     * check because no key was supplied is precisely the silent no-op this connector exists to avoid.
+     * The key for this organization, or null. A tenant key wins over the deployment key. A blank key is not
+     * a failure: the range endpoint is unauthenticated.
      */
     private String resolveApiKey(String tenantDomain) {
 
@@ -215,10 +207,8 @@ public class HIBPBreachSource implements BreachSource {
     }
 
     /**
-     * The one place that decides whether a configured value is a key at all.
-     * <p>
-     * Blank is no key, and so is the {@link HIBPConnectorConfig#NO_API_KEY} placeholder the Console shows an
-     * administrator who has none. Sending either as a credential would be worse than sending nothing.
+     * Decides whether a configured value is a key. Blank and the {@link HIBPConnectorConfig#NO_API_KEY}
+     * placeholder both mean no key.
      */
     static String normalizeApiKey(String value) {
 

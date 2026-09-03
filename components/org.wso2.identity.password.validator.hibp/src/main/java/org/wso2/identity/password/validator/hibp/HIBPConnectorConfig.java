@@ -31,22 +31,15 @@ import java.util.Map;
 import java.util.Properties;
 
 /**
- * This connector's own configuration, published as a governance connector.
- * <p>
- * Registering this is what gives the connector a per-organization setting surface and a Console presence.
- * Both appear when the bundle is installed and disappear when it is removed, so an administrator is never
- * offered a source the deployment does not have.
+ * This connector's own configuration, published as a governance connector. It gives the connector a
+ * per-organization setting surface and a Console presence, both of which appear and disappear with the bundle.
  */
 public class HIBPConnectorConfig implements IdentityConnectorConfig {
 
     /**
-     * Deliberately not "hibp", and not a prefix of any property name below.
-     * <p>
-     * When a connector's name is a prefix of its property names, the management API stops honouring the
-     * declared property order: it collects every same-prefixed property on the first pass, in the arbitrary
-     * order the platform's property map yields. Keeping the name distinct from the property namespace means
-     * each property is matched on its own pass, and {@link #getPropertyNames()} decides what an administrator
-     * sees first.
+     * Not "hibp", and not a prefix of any property name below. When the connector name prefixes its property
+     * names, the management API collects them on one pass in arbitrary map order and
+     * {@link #getPropertyNames()} stops deciding the rendered order.
      */
     public static final String CONNECTOR_NAME = "have-i-been-pwned";
     public static final String CATEGORY = "Password Security";
@@ -59,12 +52,9 @@ public class HIBPConnectorConfig implements IdentityConnectorConfig {
     public static final String API_KEY = "__secret__hibp.apiKey";
 
     /**
-     * What the API key holds when there is no key to hold.
-     * <p>
-     * The Console's generic connector form marks every text field {@code required}, with no way for a
-     * connector to say otherwise, so an empty API key makes the browser refuse to submit the form - and an
-     * administrator with no key could not change the switches either. A default that is never empty keeps
-     * the form usable. {@link #NO_API_KEY} is treated as absent everywhere the key is read.
+     * What the API key holds when there is no key. The Console's generic form marks every text field
+     * required, so an empty value blocks submitting the whole form. Treated as absent wherever the key is
+     * read.
      */
     public static final String NO_API_KEY = "none";
     public static final String ENABLE = "hibp.enable";

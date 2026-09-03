@@ -22,10 +22,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Stops calling a service that has repeatedly failed.
- * <p>
- * Without this, an outage means every registration in the deployment pays the full timeout before being told
- * the same thing the previous one was told. The source reports itself as degraded instead of retrying forever.
+ * Stops calling a service that has repeatedly failed, so an outage does not make every registration pay the
+ * full timeout.
  */
 class CircuitBreaker {
 
