@@ -35,9 +35,6 @@ class PrefixCache {
     private final long ttlMillis;
     private final LinkedHashMap<String, Entry> entries;
 
-    private long hits;
-    private long misses;
-
     PrefixCache(int maxEntries, long ttlMillis) {
 
         this.maxEntries = Math.max(1, maxEntries);
@@ -56,15 +53,12 @@ class PrefixCache {
 
         Entry entry = entries.get(prefix);
         if (entry == null) {
-            misses++;
             return null;
         }
         if (System.currentTimeMillis() > entry.expiresAt) {
             entries.remove(prefix);
-            misses++;
             return null;
         }
-        hits++;
         return entry.suffixes;
     }
 
@@ -79,15 +73,6 @@ class PrefixCache {
     synchronized void clear() {
 
         entries.clear();
-    }
-
-    /**
-     * @return the hit ratio as a whole percentage, or -1 when no lookup has been made yet.
-     */
-    synchronized int getHitRatioPercent() {
-
-        long total = hits + misses;
-        return total == 0 ? -1 : (int) ((hits * 100) / total);
     }
 
     synchronized int size() {

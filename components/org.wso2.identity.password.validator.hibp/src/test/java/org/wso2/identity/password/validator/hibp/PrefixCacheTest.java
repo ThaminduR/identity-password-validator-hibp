@@ -61,17 +61,6 @@ public class PrefixCacheTest {
         assertNull(cache.get("ABCDE"));
     }
 
-    @Test
-    public void theHitRatioIsReportableForTheAdministratorSurface() {
-
-        PrefixCache cache = new PrefixCache(10, 60000);
-        assertEquals(cache.getHitRatioPercent(), -1);
-        cache.put("ABCDE", bucket());
-        cache.get("ABCDE");
-        cache.get("ZZZZZ");
-        assertTrue(cache.getHitRatioPercent() > 0 && cache.getHitRatioPercent() < 100);
-    }
-
     private static Map<String, Long> bucket() {
 
         Map<String, Long> suffixes = new HashMap<>();
