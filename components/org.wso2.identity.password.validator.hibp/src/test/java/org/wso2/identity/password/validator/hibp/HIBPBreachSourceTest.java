@@ -89,7 +89,6 @@ public class HIBPBreachSourceTest {
         assertEquals(source().check(candidate(BREACHED), TENANT), Decision.REFUSE_BREACHED);
     }
 
-
     @Test
     public void acceptsAPasswordAbsentFromTheCorpus() throws Exception {
 
@@ -114,6 +113,18 @@ public class HIBPBreachSourceTest {
 
         source().check(candidate(BREACHED), TENANT);
         assertEquals(paddingHeaders.get(0), "true");
+    }
+
+    /**
+     * A bucket holding only padding rows means the password is not listed. Reporting that as a failure would
+     * refuse a clean password wherever the organization set the failure policy to refuse.
+     */
+    @Test
+    public void aBucketOfOnlyPaddingMeansNotListedRatherThanUnreachable() throws Exception {
+
+        body = sha1("SomeOtherPassword@1").substring(5) + ":0\r\n";
+        assertEquals(source().check(candidate("CleanPassword@9"), TENANT), Decision.ACCEPT);
+        assertEquals(requests.get(), 1, "A valid answer must not be retried as though it had failed.");
     }
 
     @Test
@@ -292,7 +303,6 @@ public class HIBPBreachSourceTest {
 
             return getString(name).map(Integer::parseInt).orElse(defaultValue);
         }
-
 
         @Override
         public boolean getBoolean(String name, boolean defaultValue) {

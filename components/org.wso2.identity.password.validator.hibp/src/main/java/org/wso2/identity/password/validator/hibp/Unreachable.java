@@ -19,9 +19,8 @@
 package org.wso2.identity.password.validator.hibp;
 
 /**
- * Signals that the corpus could not be consulted. This exception is internal to the connector. The contract
- * reports a failure by returning an unavailable outcome, and {@code evaluate} converts this exception into
- * one.
+ * Signals that the corpus could not be consulted. This exception is internal to the connector.
+ * {@code check} catches it and returns the decision the organization configured for a failure.
  */
 class Unreachable extends Exception {
 

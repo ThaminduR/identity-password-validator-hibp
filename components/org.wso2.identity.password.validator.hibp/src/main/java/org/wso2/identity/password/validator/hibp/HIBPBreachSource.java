@@ -87,13 +87,11 @@ public class HIBPBreachSource implements BreachSource {
     private volatile CircuitBreaker breaker = new CircuitBreaker(DEFAULT_BREAKER_THRESHOLD,
             DEFAULT_BREAKER_OPEN_SECONDS * 1000L);
 
-
     @Override
     public String getId() {
 
         return SOURCE_ID;
     }
-
 
     @Override
     public int getPriority() {
@@ -102,11 +100,10 @@ public class HIBPBreachSource implements BreachSource {
         return 500;
     }
 
-
     @Override
     public void configure(SourceConfiguration configuration) {
 
-        this.baseUrl = configuration.getString(PROPERTY_BASE_URL).orElse(DEFAULT_BASE_URL);
+        this.baseUrl = withTrailingSlash(configuration.getString(PROPERTY_BASE_URL).orElse(DEFAULT_BASE_URL));
         this.readTimeoutMs = configuration.getInt(PROPERTY_READ_TIMEOUT_MS, DEFAULT_READ_TIMEOUT_MS);
         this.connectTimeoutMs = configuration.getInt(PROPERTY_CONNECT_TIMEOUT_MS, DEFAULT_CONNECT_TIMEOUT_MS);
         this.retries = Math.max(0, configuration.getInt(PROPERTY_RETRIES, DEFAULT_RETRIES));
@@ -187,8 +184,6 @@ public class HIBPBreachSource implements BreachSource {
         return null;
     }
 
-
-
     @Override
     public Decision check(Credential credential, String tenantDomain) {
 
@@ -213,6 +208,15 @@ public class HIBPBreachSource implements BreachSource {
         }
 
         return suffixes.containsKey(suffix) ? Decision.REFUSE_BREACHED : Decision.ACCEPT;
+    }
+
+    /**
+     * The prefix is appended directly to this value, so a configured endpoint without a trailing separator
+     * would produce a path that does not exist.
+     */
+    private static String withTrailingSlash(String url) {
+
+        return url.endsWith("/") ? url : url + "/";
     }
 
     /**
@@ -268,7 +272,8 @@ public class HIBPBreachSource implements BreachSource {
             }
             return parse(connection.getInputStream());
         } catch (SocketTimeoutException e) {
-            throw new Unreachable("no answer within " + readTimeoutMs + " ms", true);
+            throw new Unreachable("no answer within the configured timeouts, connect " + connectTimeoutMs
+                    + " ms and read " + readTimeoutMs + " ms", true);
         } catch (IOException e) {
             // The message carries no URL beyond the endpoint and no credential.
             throw new Unreachable("the corpus could not be reached", true);
@@ -304,9 +309,8 @@ public class HIBPBreachSource implements BreachSource {
         } catch (IOException e) {
             throw new Unreachable("the corpus response could not be read", true);
         }
-        if (suffixes.isEmpty()) {
-            throw new Unreachable("the corpus response contained no usable entries", true);
-        }
+        // An empty map is a valid answer, not a failure. With padding requested the endpoint returns rows
+        // with a count of zero, and a bucket holding only those means the password is simply not listed.
         return suffixes;
     }
 
