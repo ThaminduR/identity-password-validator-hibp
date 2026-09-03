@@ -24,12 +24,10 @@ import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 import org.wso2.carbon.identity.breach.source.BreachContext;
-import org.wso2.carbon.identity.breach.source.BreachSourceException;
 import org.wso2.carbon.identity.breach.source.BreachVerdict;
 import org.wso2.carbon.identity.breach.source.Credential;
 import org.wso2.carbon.identity.breach.source.Outcome;
 import org.wso2.carbon.identity.breach.source.SourceConfiguration;
-import org.wso2.carbon.identity.breach.source.UnavailableCause;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -48,7 +46,6 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
-import static org.testng.Assert.fail;
 
 /**
  * The connector against a stand-in for the range endpoint.
@@ -144,24 +141,20 @@ public class HIBPBreachSourceTest {
     public void aRateLimitIsDistinguishableFromATransportFailure() {
 
         status = 429;
-        try {
-            source().evaluate(context(BREACHED));
-            fail("An exhausted quota must not be reported as a clean password.");
-        } catch (BreachSourceException e) {
-            assertEquals(e.getUnavailableCause(), UnavailableCause.QUOTA);
-        }
+        BreachVerdict verdict = source().evaluate(context(BREACHED));
+        assertEquals(verdict.getOutcome(), Outcome.UNAVAILABLE,
+                "An exhausted quota must not be reported as a clean password.");
+        assertTrue(verdict.toString().contains("quota"));
     }
 
     @Test
     public void aServerErrorIsATransportFailureAndNeverANotFound() {
 
         status = 503;
-        try {
-            source().evaluate(context(BREACHED));
-            fail("A failing corpus must not be reported as a clean password.");
-        } catch (BreachSourceException e) {
-            assertEquals(e.getUnavailableCause(), UnavailableCause.TRANSPORT);
-        }
+        BreachVerdict verdict = source().evaluate(context(BREACHED));
+        assertEquals(verdict.getOutcome(), Outcome.UNAVAILABLE,
+                "A failing corpus must not be reported as a clean password.");
+        assertTrue(verdict.toString().contains("503"));
     }
 
     @Test
@@ -171,15 +164,11 @@ public class HIBPBreachSourceTest {
         HIBPBreachSource source = source(config().set(HIBPBreachSource.PROPERTY_RETRIES, 0)
                 .set(HIBPBreachSource.PROPERTY_BREAKER_THRESHOLD, 2));
         for (int i = 0; i < 2; i++) {
-            try {
-                source.evaluate(context("attempt" + i));
-            } catch (BreachSourceException expected) {
-                assertEquals(expected.getUnavailableCause(), UnavailableCause.TRANSPORT);
-            }
+            assertEquals(source.evaluate(context("attempt" + i)).getOutcome(), Outcome.UNAVAILABLE);
         }
         BreachVerdict verdict = source.evaluate(context("attempt-after-open"));
         assertEquals(verdict.getOutcome(), Outcome.UNAVAILABLE);
-        assertTrue(verdict.toString().contains("CIRCUIT_OPEN"));
+        assertTrue(verdict.toString().contains("calls suspended"));
     }
 
     @Test
@@ -255,10 +244,7 @@ public class HIBPBreachSourceTest {
 
     private BreachContext context(String password) {
 
-        return BreachContext.builder()
-                .credential(new Credential(password.toCharArray()))
-                .tenantDomain(TENANT)
-                .build();
+        return new BreachContext(new Credential(password.toCharArray()), TENANT);
     }
 
     private static String sha1(String value) {

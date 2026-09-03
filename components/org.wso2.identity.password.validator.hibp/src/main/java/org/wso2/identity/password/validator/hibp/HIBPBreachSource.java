@@ -22,13 +22,10 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.wso2.carbon.identity.breach.source.BreachContext;
 import org.wso2.carbon.identity.breach.source.BreachSource;
-import org.wso2.carbon.identity.breach.source.BreachSourceException;
 import org.wso2.carbon.identity.breach.source.BreachVerdict;
 import org.wso2.carbon.identity.application.common.model.Property;
-import org.wso2.carbon.identity.breach.source.FailureAction;
 import org.wso2.carbon.identity.breach.source.PropertyDescriptor;
 import org.wso2.carbon.identity.breach.source.SourceConfiguration;
-import org.wso2.carbon.identity.breach.source.UnavailableCause;
 import org.wso2.identity.password.validator.hibp.internal.HIBPDataHolder;
 
 import java.io.BufferedReader;
@@ -104,34 +101,16 @@ public class HIBPBreachSource implements BreachSource {
     public List<PropertyDescriptor> getProperties() {
 
         return Arrays.asList(
-                PropertyDescriptor.builder(PROPERTY_API_KEY)
-                        .secret(true)
-                        .required(false)
-                        .build(),
-                PropertyDescriptor.builder(PROPERTY_BASE_URL)
-                        .defaultValue(DEFAULT_BASE_URL)
-                        .build(),
-                PropertyDescriptor.builder(PROPERTY_READ_TIMEOUT_MS)
-                        .defaultValue(String.valueOf(DEFAULT_READ_TIMEOUT_MS))
-                        .build(),
-                PropertyDescriptor.builder(PROPERTY_CONNECT_TIMEOUT_MS)
-                        .defaultValue(String.valueOf(DEFAULT_CONNECT_TIMEOUT_MS))
-                        .build(),
-                PropertyDescriptor.builder(PROPERTY_CACHE_TTL_SECONDS)
-                        .defaultValue(String.valueOf(DEFAULT_CACHE_TTL_SECONDS))
-                        .build(),
-                PropertyDescriptor.builder(PROPERTY_CACHE_MAX_ENTRIES)
-                        .defaultValue(String.valueOf(DEFAULT_CACHE_MAX_ENTRIES))
-                        .build(),
-                PropertyDescriptor.builder(PROPERTY_RETRIES)
-                        .defaultValue(String.valueOf(DEFAULT_RETRIES))
-                        .build(),
-                PropertyDescriptor.builder(PROPERTY_BREAKER_THRESHOLD)
-                        .defaultValue(String.valueOf(DEFAULT_BREAKER_THRESHOLD))
-                        .build(),
-                PropertyDescriptor.builder(PROPERTY_BREAKER_OPEN_SECONDS)
-                        .defaultValue(String.valueOf(DEFAULT_BREAKER_OPEN_SECONDS))
-                        .build());
+                PropertyDescriptor.secret(PROPERTY_API_KEY),
+                PropertyDescriptor.optional(PROPERTY_BASE_URL, DEFAULT_BASE_URL),
+                PropertyDescriptor.optional(PROPERTY_READ_TIMEOUT_MS, String.valueOf(DEFAULT_READ_TIMEOUT_MS)),
+                PropertyDescriptor.optional(PROPERTY_CONNECT_TIMEOUT_MS, String.valueOf(DEFAULT_CONNECT_TIMEOUT_MS)),
+                PropertyDescriptor.optional(PROPERTY_CACHE_TTL_SECONDS, String.valueOf(DEFAULT_CACHE_TTL_SECONDS)),
+                PropertyDescriptor.optional(PROPERTY_CACHE_MAX_ENTRIES, String.valueOf(DEFAULT_CACHE_MAX_ENTRIES)),
+                PropertyDescriptor.optional(PROPERTY_RETRIES, String.valueOf(DEFAULT_RETRIES)),
+                PropertyDescriptor.optional(PROPERTY_BREAKER_THRESHOLD, String.valueOf(DEFAULT_BREAKER_THRESHOLD)),
+                PropertyDescriptor.optional(PROPERTY_BREAKER_OPEN_SECONDS,
+                        String.valueOf(DEFAULT_BREAKER_OPEN_SECONDS)));
     }
 
     @Override
@@ -173,10 +152,9 @@ public class HIBPBreachSource implements BreachSource {
     }
 
     @Override
-    public FailureAction getFailureAction(String tenantDomain) {
+    public boolean refusesWhenUnavailable(String tenantDomain) {
 
-        return Boolean.parseBoolean(readProperty(tenantDomain, HIBPConnectorConfig.REFUSE_WHEN_UNREACHABLE))
-                ? FailureAction.DENY : FailureAction.ALLOW;
+        return Boolean.parseBoolean(readProperty(tenantDomain, HIBPConnectorConfig.REFUSE_WHEN_UNREACHABLE));
     }
 
     /**
@@ -253,7 +231,7 @@ public class HIBPBreachSource implements BreachSource {
 
 
     @Override
-    public BreachVerdict evaluate(BreachContext context) throws BreachSourceException {
+    public BreachVerdict evaluate(BreachContext context) {
 
         String digest = context.getCredential().digestHex("SHA-1");
         String prefix = digest.substring(0, 5);
@@ -263,39 +241,39 @@ public class HIBPBreachSource implements BreachSource {
         Map<String, Long> suffixes = cache.get(prefix);
         if (suffixes == null) {
             if (breaker.isOpen()) {
-                return BreachVerdict.unavailable(getId(), UnavailableCause.CIRCUIT_OPEN,
-                        "Calls are suspended after repeated failures.");
+                return BreachVerdict.unavailable(getId(), "calls suspended after repeated failures");
             }
-            suffixes = fetch(prefix, resolveApiKey(context.getTenantDomain()));
+            try {
+                suffixes = fetch(prefix, resolveApiKey(context.getTenantDomain()));
+            } catch (Unreachable e) {
+                return BreachVerdict.unavailable(getId(), e.getMessage());
+            }
             cache.put(prefix, suffixes);
         }
 
         return suffixes.containsKey(suffix) ? BreachVerdict.found(getId()) : BreachVerdict.notFound(getId());
     }
 
-    private Map<String, Long> fetch(String prefix, String key) throws BreachSourceException {
+    private Map<String, Long> fetch(String prefix, String key) throws Unreachable {
 
-        BreachSourceException last = null;
+        Unreachable last = null;
         for (int attempt = 0; attempt <= retries; attempt++) {
             try {
                 Map<String, Long> suffixes = request(prefix, key);
                 breaker.recordSuccess();
                 return suffixes;
-            } catch (BreachSourceException e) {
+            } catch (Unreachable e) {
                 last = e;
-                if (e.getUnavailableCause() == UnavailableCause.QUOTA) {
-                    // Retrying an exhausted quota only exhausts it further.
+                if (!e.isRetryable()) {
                     break;
                 }
             }
         }
         breaker.recordFailure();
-        throw last == null
-                ? new BreachSourceException(UnavailableCause.TRANSPORT, "The corpus could not be reached.")
-                : last;
+        throw last == null ? new Unreachable("the corpus could not be reached", true) : last;
     }
 
-    private Map<String, Long> request(String prefix, String key) throws BreachSourceException {
+    private Map<String, Long> request(String prefix, String key) throws Unreachable {
 
         HttpURLConnection connection = null;
         try {
@@ -313,20 +291,17 @@ public class HIBPBreachSource implements BreachSource {
 
             int status = connection.getResponseCode();
             if (status == 429 || status == 402) {
-                throw new BreachSourceException(UnavailableCause.QUOTA,
-                        "The corpus rejected the request for rate or quota reasons.");
+                throw new Unreachable("rate or quota limit reached", false);
             }
             if (status != 200) {
-                throw new BreachSourceException(UnavailableCause.TRANSPORT,
-                        "The corpus returned HTTP " + status + ".");
+                throw new Unreachable("the corpus returned HTTP " + status, true);
             }
             return parse(connection.getInputStream());
         } catch (SocketTimeoutException e) {
-            throw new BreachSourceException(UnavailableCause.TIMEOUT,
-                    "The corpus did not answer within " + readTimeoutMs + " ms.");
+            throw new Unreachable("no answer within " + readTimeoutMs + " ms", true);
         } catch (IOException e) {
             // The message deliberately carries no URL fragment beyond the endpoint and no credential.
-            throw new BreachSourceException(UnavailableCause.TRANSPORT, "The corpus could not be reached.");
+            throw new Unreachable("the corpus could not be reached", true);
         } finally {
             if (connection != null) {
                 connection.disconnect();
@@ -334,7 +309,7 @@ public class HIBPBreachSource implements BreachSource {
         }
     }
 
-    private Map<String, Long> parse(InputStream stream) throws BreachSourceException {
+    private Map<String, Long> parse(InputStream stream) throws Unreachable {
 
         Map<String, Long> suffixes = new HashMap<>();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
@@ -357,11 +332,10 @@ public class HIBPBreachSource implements BreachSource {
                 }
             }
         } catch (IOException e) {
-            throw new BreachSourceException(UnavailableCause.PARSE, "The corpus response could not be read.");
+            throw new Unreachable("the corpus response could not be read", true);
         }
         if (suffixes.isEmpty()) {
-            throw new BreachSourceException(UnavailableCause.PARSE,
-                    "The corpus response contained no usable entries.");
+            throw new Unreachable("the corpus response contained no usable entries", true);
         }
         return suffixes;
     }
