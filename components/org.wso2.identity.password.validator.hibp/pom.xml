@@ -95,7 +95,7 @@
                           does not change the contract cannot invalidate this bundle.
                         -->
                         <Import-Package>
-                            org.wso2.carbon.identity.breach.source;version="${breach.spi.imp.pkg.version.range}",
+                            org.wso2.carbon.identity.breach.detection;version="${breach.spi.imp.pkg.version.range}",
                             org.osgi.framework;version="${osgi.framework.imp.pkg.version.range}",
                             org.osgi.service.component;version="${osgi.service.component.imp.pkg.version.range}",
                             org.apache.commons.logging;version="${import.package.version.commons.logging}",

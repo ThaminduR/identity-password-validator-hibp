@@ -23,9 +23,9 @@ import com.sun.net.httpserver.HttpServer;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.wso2.carbon.identity.breach.source.Credential;
-import org.wso2.carbon.identity.breach.source.Outcome;
-import org.wso2.carbon.identity.breach.source.SourceConfiguration;
+import org.wso2.carbon.identity.breach.detection.Credential;
+import org.wso2.carbon.identity.breach.detection.Outcome;
+import org.wso2.carbon.identity.breach.detection.SourceConfiguration;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -33,6 +33,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -181,11 +182,11 @@ public class HIBPBreachSourceTest {
     }
 
     @Test
-    public void theApiKeyIsDeclaredSecretSoItCannotBeReturnedByAnyApi() {
+    public void everySettingTheConnectorReadsIsDeclared() {
 
-        assertTrue(new HIBPBreachSource().getProperties().stream()
-                .filter(p -> HIBPBreachSource.PROPERTY_API_KEY.equals(p.getName()))
-                .allMatch(p -> p.isSecret() && !p.isRequired()));
+        assertTrue(new HIBPBreachSource().getPropertyNames()
+                .containsAll(Arrays.asList(HIBPBreachSource.PROPERTY_API_KEY, HIBPBreachSource.PROPERTY_BASE_URL,
+                        HIBPBreachSource.PROPERTY_READ_TIMEOUT_MS)));
     }
 
     private void handle(HttpExchange exchange) throws IOException {
@@ -305,12 +306,6 @@ public class HIBPBreachSourceTest {
         public boolean getBoolean(String name, boolean defaultValue) {
 
             return getString(name).map(Boolean::parseBoolean).orElse(defaultValue);
-        }
-
-        @Override
-        public Optional<char[]> getSecret(String name) {
-
-            return getString(name).map(String::toCharArray);
         }
 
         @Override
