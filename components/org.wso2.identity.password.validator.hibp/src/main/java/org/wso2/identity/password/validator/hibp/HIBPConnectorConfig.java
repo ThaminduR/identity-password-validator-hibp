@@ -105,10 +105,8 @@ public class HIBPConnectorConfig implements IdentityConnectorConfig {
     @Override
     public Map<String, String> getPropertyDescriptionMapping() {
 
-        // One short line each. The Console gives a property's hint the full width of the label column, so a
-        // hint that wraps runs into the switch on the right and appears to belong to the next property.
-        // Every shipped connector keeps these to a single line and puts longer explanations in its
-        // documentation.
+        // One line each. A hint that wraps runs into the switch on the right and reads as though it
+        // belongs to the next property.
         Map<String, String> descriptions = new LinkedHashMap<>();
         descriptions.put(ENABLE, "Refuse passwords found in the Have I Been Pwned breach corpus.");
         descriptions.put(API_KEY, "Optional. Leave this as \"none\" if you do not have a key.");
@@ -120,7 +118,6 @@ public class HIBPConnectorConfig implements IdentityConnectorConfig {
     @Override
     public String[] getPropertyNames() {
 
-        // This is the order the Console renders. See CONNECTOR_NAME for the condition that makes it apply.
         return new String[] { ENABLE, API_KEY, REFUSE_WHEN_UNREACHABLE };
     }
 
@@ -128,12 +125,10 @@ public class HIBPConnectorConfig implements IdentityConnectorConfig {
     public Properties getDefaultPropertyValues(String tenantDomain) throws IdentityGovernanceException {
 
         Properties defaults = new Properties();
-        // Not empty. See NO_API_KEY. The range endpoint does not require authentication, so a missing key
-        // must not stop the check.
+        // Not empty. See NO_API_KEY.
         defaults.put(API_KEY, NO_API_KEY);
-        // Off until an administrator enables it.
         defaults.put(ENABLE, "false");
-        // Default to allowing, so that a third party's outage does not stop every password change.
+        // Allow by default, so that a third party's outage does not stop every password change.
         defaults.put(REFUSE_WHEN_UNREACHABLE, "false");
 
         return defaults;
@@ -170,8 +165,8 @@ public class HIBPConnectorConfig implements IdentityConnectorConfig {
         apiKey.setType(IdentityMgtConstants.DataTypes.STRING.getValue());
         metadata.put(API_KEY, apiKey);
 
-        // The type also decides the control the Console renders. It shows a toggle when a property's value
-        // is "true" or "false", and a text box otherwise.
+        // The type decides the control the Console renders: a toggle for "true" or "false", otherwise a
+        // text box.
         Property enable = new Property();
         enable.setType(IdentityMgtConstants.DataTypes.BOOLEAN.getValue());
         metadata.put(ENABLE, enable);

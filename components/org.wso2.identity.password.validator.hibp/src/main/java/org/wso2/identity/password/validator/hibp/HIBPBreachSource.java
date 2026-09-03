@@ -20,11 +20,11 @@ package org.wso2.identity.password.validator.hibp;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.wso2.carbon.identity.breach.detection.BreachSource;
-import org.wso2.carbon.identity.breach.detection.Credential;
-import org.wso2.carbon.identity.breach.detection.Outcome;
+import org.wso2.carbon.identity.breach.detection.spi.BreachSource;
+import org.wso2.carbon.identity.breach.detection.model.Credential;
+import org.wso2.carbon.identity.breach.detection.model.Decision;
 import org.wso2.carbon.identity.application.common.model.Property;
-import org.wso2.carbon.identity.breach.detection.SourceConfiguration;
+import org.wso2.carbon.identity.breach.detection.spi.SourceConfiguration;
 import org.wso2.identity.password.validator.hibp.internal.HIBPDataHolder;
 
 import java.io.BufferedReader;
@@ -133,12 +133,6 @@ public class HIBPBreachSource implements BreachSource {
         return Boolean.parseBoolean(readProperty(tenantDomain, HIBPConnectorConfig.ENABLE));
     }
 
-    @Override
-    public boolean refusesWhenUnavailable(String tenantDomain) {
-
-        return Boolean.parseBoolean(readProperty(tenantDomain, HIBPConnectorConfig.REFUSE_WHEN_UNREACHABLE));
-    }
-
     /**
      * Returns the key for this organization, or null. A tenant key takes precedence over the deployment
      * key. A blank key is not a failure, because the range endpoint does not require authentication.
@@ -196,29 +190,38 @@ public class HIBPBreachSource implements BreachSource {
 
 
     @Override
-    public Outcome evaluate(Credential credential, String tenantDomain) {
+    public Decision check(Credential credential, String tenantDomain) {
 
         String digest = credential.digestHex("SHA-1");
         String prefix = digest.substring(0, 5);
-        // The digest suffix is compared here and is not sent.
+        // Only the prefix is sent. The suffix is compared here.
         String suffix = digest.substring(5);
 
         Map<String, Long> suffixes = cache.get(prefix);
         if (suffixes == null) {
             if (breaker.isOpen()) {
                 LOG.warn("Have I Been Pwned is not being called: suspended after repeated failures.");
-                return Outcome.UNAVAILABLE;
+                return whenUnreachable(tenantDomain);
             }
             try {
                 suffixes = fetch(prefix, resolveApiKey(tenantDomain));
             } catch (Unreachable e) {
                 LOG.warn("Have I Been Pwned could not be consulted: " + e.getMessage() + ".");
-                return Outcome.UNAVAILABLE;
+                return whenUnreachable(tenantDomain);
             }
             cache.put(prefix, suffixes);
         }
 
-        return suffixes.containsKey(suffix) ? Outcome.FOUND : Outcome.NOT_FOUND;
+        return suffixes.containsKey(suffix) ? Decision.REFUSE_BREACHED : Decision.ACCEPT;
+    }
+
+    /**
+     * What to do with a password this connector could not check, as the organization configured it.
+     */
+    private Decision whenUnreachable(String tenantDomain) {
+
+        String configured = readProperty(tenantDomain, HIBPConnectorConfig.REFUSE_WHEN_UNREACHABLE);
+        return Boolean.parseBoolean(configured) ? Decision.REFUSE_UNVERIFIED : Decision.ACCEPT;
     }
 
     private Map<String, Long> fetch(String prefix, String key) throws Unreachable {

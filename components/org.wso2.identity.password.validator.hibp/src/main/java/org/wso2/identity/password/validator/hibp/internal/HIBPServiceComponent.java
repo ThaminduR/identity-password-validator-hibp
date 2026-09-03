@@ -29,7 +29,7 @@ import org.wso2.identity.password.validator.hibp.HIBPBreachSource;
 import org.osgi.service.component.annotations.Reference;
 import org.osgi.service.component.annotations.ReferenceCardinality;
 import org.osgi.service.component.annotations.ReferencePolicy;
-import org.wso2.carbon.identity.breach.detection.BreachSource;
+import org.wso2.carbon.identity.breach.detection.spi.BreachSource;
 import org.wso2.carbon.identity.governance.IdentityGovernanceService;
 import org.wso2.carbon.identity.governance.common.IdentityConnectorConfig;
 import org.wso2.identity.password.validator.hibp.HIBPConnectorConfig;
