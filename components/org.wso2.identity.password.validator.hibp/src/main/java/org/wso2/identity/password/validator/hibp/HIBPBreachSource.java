@@ -153,10 +153,10 @@ public class HIBPBreachSource implements BreachSource {
         this.deploymentApiKey = readSecret(configuration, PROPERTY_API_KEY);
 
         this.cache = new PrefixCache(configuration.getInt(PROPERTY_CACHE_MAX_ENTRIES, DEFAULT_CACHE_MAX_ENTRIES),
-                configuration.getLong(PROPERTY_CACHE_TTL_SECONDS, DEFAULT_CACHE_TTL_SECONDS) * 1000L);
+                configuration.getInt(PROPERTY_CACHE_TTL_SECONDS, DEFAULT_CACHE_TTL_SECONDS) * 1000L);
         this.breaker = new CircuitBreaker(
                 configuration.getInt(PROPERTY_BREAKER_THRESHOLD, DEFAULT_BREAKER_THRESHOLD),
-                configuration.getLong(PROPERTY_BREAKER_OPEN_SECONDS, DEFAULT_BREAKER_OPEN_SECONDS) * 1000L);
+                configuration.getInt(PROPERTY_BREAKER_OPEN_SECONDS, DEFAULT_BREAKER_OPEN_SECONDS) * 1000L);
 
         LOG.info("The Have I Been Pwned connector was configured: endpoint=" + baseUrl + ", readTimeout="
                 + readTimeoutMs + " ms, apiKey=" + (deploymentApiKey == null ? "not set" : "set") + ".");

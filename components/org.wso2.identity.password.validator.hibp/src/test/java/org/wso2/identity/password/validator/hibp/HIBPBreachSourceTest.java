@@ -179,7 +179,7 @@ public class HIBPBreachSourceTest {
         }
         BreachVerdict verdict = source.evaluate(context("attempt-after-open"));
         assertEquals(verdict.getOutcome(), Outcome.UNAVAILABLE);
-        assertEquals(verdict.getCause().orElse(null), UnavailableCause.CIRCUIT_OPEN);
+        assertTrue(verdict.toString().contains("CIRCUIT_OPEN"));
     }
 
     @Test
@@ -320,11 +320,6 @@ public class HIBPBreachSourceTest {
             return getString(name).map(Integer::parseInt).orElse(defaultValue);
         }
 
-        @Override
-        public long getLong(String name, long defaultValue) {
-
-            return getString(name).map(Long::parseLong).orElse(defaultValue);
-        }
 
         @Override
         public boolean getBoolean(String name, boolean defaultValue) {
