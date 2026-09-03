@@ -22,8 +22,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Stops calling a service that has repeatedly failed, so an outage does not make every registration pay the
- * full timeout.
+ * Stops calling a service that has failed repeatedly, so that an outage does not make every password write
+ * wait for the full timeout.
  */
 class CircuitBreaker {
 
@@ -49,7 +49,7 @@ class CircuitBreaker {
             return false;
         }
         if (System.currentTimeMillis() - opened >= openMillis) {
-            // Let one call through to find out whether the service came back.
+            // Allow one call through to test whether the service has recovered.
             openedAt.set(0);
             consecutiveFailures.set(failureThreshold - 1);
             return false;

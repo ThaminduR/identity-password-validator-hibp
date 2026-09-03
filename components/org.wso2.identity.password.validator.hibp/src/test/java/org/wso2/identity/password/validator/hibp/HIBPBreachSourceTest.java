@@ -33,7 +33,6 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -179,14 +178,6 @@ public class HIBPBreachSourceTest {
         HIBPBreachSource source = new HIBPBreachSource();
         assertEquals(source.getId(), "hibp");
         assertTrue(source.getPriority() > 100);
-    }
-
-    @Test
-    public void everySettingTheConnectorReadsIsDeclared() {
-
-        assertTrue(new HIBPBreachSource().getPropertyNames()
-                .containsAll(Arrays.asList(HIBPBreachSource.PROPERTY_API_KEY, HIBPBreachSource.PROPERTY_BASE_URL,
-                        HIBPBreachSource.PROPERTY_READ_TIMEOUT_MS)));
     }
 
     private void handle(HttpExchange exchange) throws IOException {

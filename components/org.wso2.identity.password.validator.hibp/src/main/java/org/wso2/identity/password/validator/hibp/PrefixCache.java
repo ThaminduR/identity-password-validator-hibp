@@ -23,11 +23,11 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Caches the range response for a five-character prefix. The response is stable for hours and shared by every
- * password in the bucket.
+ * Caches the range response for a five-character prefix. The response is stable for hours and is shared by
+ * every password whose digest starts with that prefix.
  * <p>
- * The candidate password and its full digest are never keys or values. A cache keyed on the digest would be a
- * password store.
+ * The candidate password and its full digest are never used as a key or a value. A cache keyed on the full
+ * digest would be a store of passwords.
  */
 class PrefixCache {
 
@@ -82,7 +82,7 @@ class PrefixCache {
     }
 
     /**
-     * @return the hit ratio as a whole percentage, or -1 when nothing has been looked up yet.
+     * @return the hit ratio as a whole percentage, or -1 when no lookup has been made yet.
      */
     synchronized int getHitRatioPercent() {
 
@@ -96,7 +96,7 @@ class PrefixCache {
     }
 
     /**
-     * One bucket: the suffixes the range endpoint returned, and when they stop being trusted.
+     * One bucket: the suffixes the range endpoint returned, and the time they expire.
      */
     private static final class Entry {
 

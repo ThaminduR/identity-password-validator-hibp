@@ -35,7 +35,7 @@ import org.wso2.carbon.identity.governance.common.IdentityConnectorConfig;
 import org.wso2.identity.password.validator.hibp.HIBPConnectorConfig;
 
 /**
- * Publishes the source. That is the whole of the connector's integration with the product: one service
+ * Publishes the breach source. The connector's entire integration with the product is this one service
  * registration against a contract imported at its own compatibility range.
  */
 @Component(
@@ -55,8 +55,8 @@ public class HIBPServiceComponent {
 
         source = new HIBPBreachSource();
         registration = context.getBundleContext().registerService(BreachSource.class, source, null);
-        // Publishing this is what gives the connector its own per-organization settings and its Console
-        // presence. Both go away with the bundle.
+        // Publishing this gives the connector its per-organization settings and its Console presence. Both
+        // are removed when the bundle is removed.
         connectorRegistration = context.getBundleContext()
                 .registerService(IdentityConnectorConfig.class, new HIBPConnectorConfig(), null);
         LOG.info("The Have I Been Pwned breach source connector is registered.");

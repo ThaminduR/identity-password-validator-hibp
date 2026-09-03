@@ -19,8 +19,9 @@
 package org.wso2.identity.password.validator.hibp;
 
 /**
- * The corpus could not be consulted. Internal to this connector: the contract reports failure by returning an
- * unavailable verdict, and {@code evaluate} converts this into one.
+ * Signals that the corpus could not be consulted. This exception is internal to the connector. The contract
+ * reports a failure by returning an unavailable outcome, and {@code evaluate} converts this exception into
+ * one.
  */
 class Unreachable extends Exception {
 
@@ -35,7 +36,7 @@ class Unreachable extends Exception {
     }
 
     /**
-     * @return false for a quota or rate limit, where retrying only exhausts it further.
+     * @return false for a quota or rate limit, where a retry consumes more of the quota.
      */
     boolean isRetryable() {
 

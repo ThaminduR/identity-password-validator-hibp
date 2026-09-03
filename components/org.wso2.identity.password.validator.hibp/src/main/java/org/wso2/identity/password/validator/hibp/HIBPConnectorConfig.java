@@ -32,29 +32,30 @@ import java.util.Properties;
 
 /**
  * This connector's own configuration, published as a governance connector. It gives the connector a
- * per-organization setting surface and a Console presence, both of which appear and disappear with the bundle.
+ * per-organization set of settings and a Console presence. Both appear when the bundle is deployed and are
+ * removed when it is removed.
  */
 public class HIBPConnectorConfig implements IdentityConnectorConfig {
 
     /**
-     * Not "hibp", and not a prefix of any property name below. When the connector name prefixes its property
-     * names, the management API collects them on one pass in arbitrary map order and
-     * {@link #getPropertyNames()} stops deciding the rendered order.
+     * This is not "hibp", and it is not a prefix of any property name below. When the connector name is a
+     * prefix of its property names, the management API collects them in one pass in arbitrary map order, and
+     * {@link #getPropertyNames()} no longer decides the order the Console renders.
      */
     public static final String CONNECTOR_NAME = "have-i-been-pwned";
     public static final String CATEGORY = "Password Security";
 
     /**
      * The {@code __secret__} prefix is the platform's marker for a credential in connector configuration.
-     * It is what makes the Console render this as a password field rather than a plain text box, and it is
-     * the same convention the shipped Sift and ELK connectors use for their own keys.
+     * It makes the Console render this property as a password field instead of a plain text box. The shipped
+     * Sift and ELK connectors use the same convention for their keys.
      */
     public static final String API_KEY = "__secret__hibp.apiKey";
 
     /**
-     * What the API key holds when there is no key. The Console's generic form marks every text field
-     * required, so an empty value blocks submitting the whole form. Treated as absent wherever the key is
-     * read.
+     * The value the API key property holds when no key is set. The Console's generic form marks every text
+     * field as required, so an empty value blocks submission of the whole form. This value is treated as
+     * absent wherever the key is read.
      */
     public static final String NO_API_KEY = "none";
     public static final String ENABLE = "hibp.enable";
@@ -105,9 +106,9 @@ public class HIBPConnectorConfig implements IdentityConnectorConfig {
     public Map<String, String> getPropertyDescriptionMapping() {
 
         // One short line each. The Console gives a property's hint the full width of the label column, so a
-        // hint that wraps runs up against the switch on the right and reads as though it belongs to the text
-        // rather than to the setting. Every shipped connector keeps these to a single line; the longer
-        // explanations live in the connector's documentation.
+        // hint that wraps runs into the switch on the right and appears to belong to the next property.
+        // Every shipped connector keeps these to a single line and puts longer explanations in its
+        // documentation.
         Map<String, String> descriptions = new LinkedHashMap<>();
         descriptions.put(ENABLE, "Refuse passwords found in the Have I Been Pwned breach corpus.");
         descriptions.put(API_KEY, "Optional. Leave this as \"none\" if you do not have a key.");
@@ -119,7 +120,7 @@ public class HIBPConnectorConfig implements IdentityConnectorConfig {
     @Override
     public String[] getPropertyNames() {
 
-        // This is the order the Console renders. See CONNECTOR_NAME for why it is honoured at all.
+        // This is the order the Console renders. See CONNECTOR_NAME for the condition that makes it apply.
         return new String[] { ENABLE, API_KEY, REFUSE_WHEN_UNREACHABLE };
     }
 
@@ -127,12 +128,12 @@ public class HIBPConnectorConfig implements IdentityConnectorConfig {
     public Properties getDefaultPropertyValues(String tenantDomain) throws IdentityGovernanceException {
 
         Properties defaults = new Properties();
-        // Not empty: see NO_API_KEY. The range endpoint is unauthenticated, and a missing key must never be
-        // read as a reason to stop checking.
+        // Not empty. See NO_API_KEY. The range endpoint does not require authentication, so a missing key
+        // must not stop the check.
         defaults.put(API_KEY, NO_API_KEY);
-        // Off until an administrator asks for it.
+        // Off until an administrator enables it.
         defaults.put(ENABLE, "false");
-        // A third party's outage should not stop every password change in the deployment.
+        // Default to allowing, so that a third party's outage does not stop every password change.
         defaults.put(REFUSE_WHEN_UNREACHABLE, "false");
 
         return defaults;
@@ -169,8 +170,8 @@ public class HIBPConnectorConfig implements IdentityConnectorConfig {
         apiKey.setType(IdentityMgtConstants.DataTypes.STRING.getValue());
         metadata.put(API_KEY, apiKey);
 
-        // A boolean is also what makes the Console render a switch: it picks a toggle when a property's
-        // value is "true" or "false", and a text box otherwise.
+        // The type also decides the control the Console renders. It shows a toggle when a property's value
+        // is "true" or "false", and a text box otherwise.
         Property enable = new Property();
         enable.setType(IdentityMgtConstants.DataTypes.BOOLEAN.getValue());
         metadata.put(ENABLE, enable);

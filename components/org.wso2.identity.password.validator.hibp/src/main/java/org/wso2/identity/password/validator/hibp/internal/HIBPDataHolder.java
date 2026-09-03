@@ -21,8 +21,8 @@ package org.wso2.identity.password.validator.hibp.internal;
 import org.wso2.carbon.identity.governance.IdentityGovernanceService;
 
 /**
- * Holds the services this connector needs. The governance service is what gives the connector its own
- * per-organization configuration, and therefore its own presence in the Console.
+ * Holds the services this connector needs. The governance service provides the connector's
+ * per-organization configuration, which is also what gives it a presence in the Console.
  */
 public class HIBPDataHolder {
 

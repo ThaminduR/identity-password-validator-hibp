@@ -35,9 +35,7 @@ import java.net.HttpURLConnection;
 import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -45,7 +43,8 @@ import java.util.Map;
  * Checks a candidate against the Have I Been Pwned corpus without sending the password. Five characters of
  * the SHA-1 digest are sent, the service returns every suffix sharing that prefix, and the match is made here.
  * <p>
- * The reference implementation of the SPI, released separately from the core.
+ * This connector is the reference implementation of the contract and is released separately from the
+ * detection bundle.
  */
 public class HIBPBreachSource implements BreachSource {
 
@@ -65,8 +64,8 @@ public class HIBPBreachSource implements BreachSource {
 
     private static final String DEFAULT_BASE_URL = "https://api.pwnedpasswords.com/range/";
     /**
-     * Tighter than the platform's action HTTP client default of 5000 ms, which was chosen for a
-     * customer-hosted extension rather than for a call made on every password write.
+     * Shorter than the platform's action HTTP client default of 5000 ms. That default was chosen for a
+     * customer-hosted extension, not for a call made on every password write.
      */
     private static final int DEFAULT_READ_TIMEOUT_MS = 1500;
     private static final int DEFAULT_CONNECT_TIMEOUT_MS = 1000;
@@ -97,17 +96,9 @@ public class HIBPBreachSource implements BreachSource {
 
 
     @Override
-    public List<String> getPropertyNames() {
-
-        return Arrays.asList(PROPERTY_API_KEY, PROPERTY_BASE_URL, PROPERTY_READ_TIMEOUT_MS,
-                PROPERTY_CONNECT_TIMEOUT_MS, PROPERTY_CACHE_TTL_SECONDS, PROPERTY_CACHE_MAX_ENTRIES,
-                PROPERTY_RETRIES, PROPERTY_BREAKER_THRESHOLD, PROPERTY_BREAKER_OPEN_SECONDS);
-    }
-
-    @Override
     public int getPriority() {
 
-        // After any offline source, before slower remote ones.
+        // Called after an in-process source and before a slower remote one.
         return 500;
     }
 
@@ -133,8 +124,8 @@ public class HIBPBreachSource implements BreachSource {
     }
 
     /**
-     * Whether this organization asked for this source. The answer lives in this connector's own governance
-     * configuration, which is also what an administrator edits in the Console.
+     * Whether this organization asked for this source. The value is held in this connector's own governance
+     * configuration, which is what an administrator edits in the Console.
      */
     @Override
     public boolean isEnabled(String tenantDomain) {
@@ -149,8 +140,8 @@ public class HIBPBreachSource implements BreachSource {
     }
 
     /**
-     * The key for this organization, or null. A tenant key wins over the deployment key. A blank key is not
-     * a failure: the range endpoint is unauthenticated.
+     * Returns the key for this organization, or null. A tenant key takes precedence over the deployment
+     * key. A blank key is not a failure, because the range endpoint does not require authentication.
      */
     private String resolveApiKey(String tenantDomain) {
 
@@ -159,8 +150,8 @@ public class HIBPBreachSource implements BreachSource {
     }
 
     /**
-     * Decides whether a configured value is a key. Blank and the {@link HIBPConnectorConfig#NO_API_KEY}
-     * placeholder both mean no key.
+     * Decides whether a configured value is a key. A blank value and the
+     * {@link HIBPConnectorConfig#NO_API_KEY} placeholder both mean that no key is set.
      */
     static String normalizeApiKey(String value) {
 
@@ -175,8 +166,8 @@ public class HIBPBreachSource implements BreachSource {
     }
 
     /**
-     * Read one of this connector's own settings for an organization. A store that cannot be read yields
-     * nothing rather than an assumption, so the source stays off instead of guessing that it is on.
+     * Reads one of this connector's own settings for an organization. A store that cannot be read returns
+     * nothing, so the source stays off rather than assuming it is on.
      */
     private String readProperty(String tenantDomain, String name) {
 
@@ -209,7 +200,7 @@ public class HIBPBreachSource implements BreachSource {
 
         String digest = credential.digestHex("SHA-1");
         String prefix = digest.substring(0, 5);
-        // The suffix never leaves this process.
+        // The digest suffix is compared here and is not sent.
         String suffix = digest.substring(5);
 
         Map<String, Long> suffixes = cache.get(prefix);
@@ -259,7 +250,7 @@ public class HIBPBreachSource implements BreachSource {
             connection.setConnectTimeout(connectTimeoutMs);
             connection.setReadTimeout(readTimeoutMs);
             connection.setRequestProperty("User-Agent", USER_AGENT);
-            // Padding keeps the response size from revealing how many entries the bucket holds.
+            // Padding stops the response size from revealing how many entries the bucket holds.
             connection.setRequestProperty("Add-Padding", "true");
             if (key != null) {
                 connection.setRequestProperty("hibp-api-key", key);
@@ -276,7 +267,7 @@ public class HIBPBreachSource implements BreachSource {
         } catch (SocketTimeoutException e) {
             throw new Unreachable("no answer within " + readTimeoutMs + " ms", true);
         } catch (IOException e) {
-            // The message deliberately carries no URL fragment beyond the endpoint and no credential.
+            // The message carries no URL beyond the endpoint and no credential.
             throw new Unreachable("the corpus could not be reached", true);
         } finally {
             if (connection != null) {
@@ -302,7 +293,7 @@ public class HIBPBreachSource implements BreachSource {
                 } catch (NumberFormatException e) {
                     continue;
                 }
-                // Padding rows are returned with a count of zero and are not matches.
+                // A padding row is returned with a count of zero and is not a match.
                 if (count > 0) {
                     suffixes.put(suffix, count);
                 }
@@ -317,7 +308,7 @@ public class HIBPBreachSource implements BreachSource {
     }
 
     /**
-     * Drop the API key and the cached ranges. Called when the connector bundle stops.
+     * Releases the API key and the cached ranges. Called when the connector bundle stops.
      */
     public void shutdown() {
 
