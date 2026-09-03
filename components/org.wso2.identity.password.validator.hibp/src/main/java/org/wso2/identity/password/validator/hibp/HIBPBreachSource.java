@@ -260,13 +260,6 @@ public class HIBPBreachSource implements BreachSource {
         return null;
     }
 
-    @Override
-    public boolean isConfigured(String tenantDomain) {
-
-        // The range endpoint needs no authentication. A blank key must never be read as a reason to stop
-        // enforcing - reporting every password clean while presenting as enabled is the failure this avoids.
-        return baseUrl != null && !baseUrl.trim().isEmpty();
-    }
 
 
     @Override

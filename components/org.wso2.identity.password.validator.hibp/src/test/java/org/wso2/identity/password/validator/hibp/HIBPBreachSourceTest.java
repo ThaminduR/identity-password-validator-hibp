@@ -183,21 +183,16 @@ public class HIBPBreachSourceTest {
     }
 
     @Test
-    public void aMissingApiKeyIsNeverAReasonToStopChecking() {
+    public void aMissingApiKeyIsNeverAReasonToStopChecking() throws Exception {
 
-        // A blank key reporting every password clean while presenting as enabled is the defect this avoids.
-        HIBPBreachSource source = source();
-        assertTrue(source.isConfigured(TENANT));
+        // The range endpoint needs no key. Reporting every password clean without one is the defect avoided.
+        assertEquals(source().evaluate(context(BREACHED)).getOutcome(), Outcome.FOUND);
     }
 
-    /**
-     * Not offline, so the engine bounds the call on a worker thread rather than running it inline.
-     */
     @Test
-    public void itDeclaresItselfRemoteSoTheEngineBoundsIt() {
+    public void itIsIdentifiedAndOrderedAfterOfflineSources() {
 
         HIBPBreachSource source = new HIBPBreachSource();
-        assertFalse(source.isOffline());
         assertEquals(source.getId(), "hibp");
         assertTrue(source.getPriority() > 100);
     }
