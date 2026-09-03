@@ -23,8 +23,6 @@ import com.sun.net.httpserver.HttpServer;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.wso2.carbon.identity.breach.source.BreachContext;
-import org.wso2.carbon.identity.breach.source.BreachVerdict;
 import org.wso2.carbon.identity.breach.source.Credential;
 import org.wso2.carbon.identity.breach.source.Outcome;
 import org.wso2.carbon.identity.breach.source.SourceConfiguration;
@@ -88,20 +86,20 @@ public class HIBPBreachSourceTest {
     @Test
     public void findsAPasswordPresentInTheCorpus() throws Exception {
 
-        assertEquals(source().evaluate(context(BREACHED)).getOutcome(), Outcome.FOUND);
+        assertEquals(source().evaluate(candidate(BREACHED), TENANT), Outcome.FOUND);
     }
 
 
     @Test
     public void acceptsAPasswordAbsentFromTheCorpus() throws Exception {
 
-        assertEquals(source().evaluate(context("Zx9q!Kt7#Lm2vRb4")).getOutcome(), Outcome.NOT_FOUND);
+        assertEquals(source().evaluate(candidate("Zx9q!Kt7#Lm2vRb4"), TENANT), Outcome.NOT_FOUND);
     }
 
     @Test
     public void onlyTheFirstFiveCharactersOfTheDigestCrossTheBoundary() throws Exception {
 
-        source().evaluate(context(BREACHED));
+        source().evaluate(candidate(BREACHED), TENANT);
 
         String digest = sha1(BREACHED);
         assertEquals(requestedPaths.size(), 1);
@@ -114,7 +112,7 @@ public class HIBPBreachSourceTest {
     @Test
     public void paddingIsRequestedSoTheResponseSizeRevealsNothing() throws Exception {
 
-        source().evaluate(context(BREACHED));
+        source().evaluate(candidate(BREACHED), TENANT);
         assertEquals(paddingHeaders.get(0), "true");
     }
 
@@ -125,15 +123,15 @@ public class HIBPBreachSourceTest {
         String digest = sha1("PaddedOnly@1");
         body = digest.substring(5) + ":0\r\n" + defaultBody();
         HIBPBreachSource source = source();
-        assertEquals(source.evaluate(context("PaddedOnly@1")).getOutcome(), Outcome.NOT_FOUND);
+        assertEquals(source.evaluate(candidate("PaddedOnly@1"), TENANT), Outcome.NOT_FOUND);
     }
 
     @Test
     public void aBucketIsFetchedOnceAndThenServedFromTheCache() throws Exception {
 
         HIBPBreachSource source = source();
-        source.evaluate(context(BREACHED));
-        source.evaluate(context(BREACHED));
+        source.evaluate(candidate(BREACHED), TENANT);
+        source.evaluate(candidate(BREACHED), TENANT);
         assertEquals(requests.get(), 1, "The bucket is stable for hours; refetching it buys nothing.");
     }
 
@@ -141,20 +139,18 @@ public class HIBPBreachSourceTest {
     public void aRateLimitIsDistinguishableFromATransportFailure() {
 
         status = 429;
-        BreachVerdict verdict = source().evaluate(context(BREACHED));
-        assertEquals(verdict.getOutcome(), Outcome.UNAVAILABLE,
+        Outcome verdict = source().evaluate(candidate(BREACHED), TENANT);
+        assertEquals(verdict, Outcome.UNAVAILABLE,
                 "An exhausted quota must not be reported as a clean password.");
-        assertTrue(verdict.toString().contains("quota"));
     }
 
     @Test
     public void aServerErrorIsATransportFailureAndNeverANotFound() {
 
         status = 503;
-        BreachVerdict verdict = source().evaluate(context(BREACHED));
-        assertEquals(verdict.getOutcome(), Outcome.UNAVAILABLE,
+        Outcome verdict = source().evaluate(candidate(BREACHED), TENANT);
+        assertEquals(verdict, Outcome.UNAVAILABLE,
                 "A failing corpus must not be reported as a clean password.");
-        assertTrue(verdict.toString().contains("503"));
     }
 
     @Test
@@ -164,18 +160,16 @@ public class HIBPBreachSourceTest {
         HIBPBreachSource source = source(config().set(HIBPBreachSource.PROPERTY_RETRIES, 0)
                 .set(HIBPBreachSource.PROPERTY_BREAKER_THRESHOLD, 2));
         for (int i = 0; i < 2; i++) {
-            assertEquals(source.evaluate(context("attempt" + i)).getOutcome(), Outcome.UNAVAILABLE);
+            assertEquals(source.evaluate(candidate("attempt" + i), TENANT), Outcome.UNAVAILABLE);
         }
-        BreachVerdict verdict = source.evaluate(context("attempt-after-open"));
-        assertEquals(verdict.getOutcome(), Outcome.UNAVAILABLE);
-        assertTrue(verdict.toString().contains("calls suspended"));
+        assertEquals(source.evaluate(candidate("attempt-after-open"), TENANT), Outcome.UNAVAILABLE);
     }
 
     @Test
     public void aMissingApiKeyIsNeverAReasonToStopChecking() throws Exception {
 
         // The range endpoint needs no key. Reporting every password clean without one is the defect avoided.
-        assertEquals(source().evaluate(context(BREACHED)).getOutcome(), Outcome.FOUND);
+        assertEquals(source().evaluate(candidate(BREACHED), TENANT), Outcome.FOUND);
     }
 
     @Test
@@ -242,9 +236,9 @@ public class HIBPBreachSourceTest {
                 .set(HIBPBreachSource.PROPERTY_CONNECT_TIMEOUT_MS, 2000);
     }
 
-    private BreachContext context(String password) {
+    private Credential candidate(String password) {
 
-        return new BreachContext(new Credential(password.toCharArray()), TENANT);
+        return new Credential(password.toCharArray());
     }
 
     private static String sha1(String value) {

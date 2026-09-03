@@ -20,9 +20,9 @@ package org.wso2.identity.password.validator.hibp;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.wso2.carbon.identity.breach.source.BreachContext;
 import org.wso2.carbon.identity.breach.source.BreachSource;
-import org.wso2.carbon.identity.breach.source.BreachVerdict;
+import org.wso2.carbon.identity.breach.source.Credential;
+import org.wso2.carbon.identity.breach.source.Outcome;
 import org.wso2.carbon.identity.application.common.model.Property;
 import org.wso2.carbon.identity.breach.source.PropertyDescriptor;
 import org.wso2.carbon.identity.breach.source.SourceConfiguration;
@@ -231,9 +231,9 @@ public class HIBPBreachSource implements BreachSource {
 
 
     @Override
-    public BreachVerdict evaluate(BreachContext context) {
+    public Outcome evaluate(Credential credential, String tenantDomain) {
 
-        String digest = context.getCredential().digestHex("SHA-1");
+        String digest = credential.digestHex("SHA-1");
         String prefix = digest.substring(0, 5);
         // The suffix never leaves this process.
         String suffix = digest.substring(5);
@@ -241,17 +241,19 @@ public class HIBPBreachSource implements BreachSource {
         Map<String, Long> suffixes = cache.get(prefix);
         if (suffixes == null) {
             if (breaker.isOpen()) {
-                return BreachVerdict.unavailable(getId(), "calls suspended after repeated failures");
+                LOG.warn("Have I Been Pwned is not being called: suspended after repeated failures.");
+                return Outcome.UNAVAILABLE;
             }
             try {
-                suffixes = fetch(prefix, resolveApiKey(context.getTenantDomain()));
+                suffixes = fetch(prefix, resolveApiKey(tenantDomain));
             } catch (Unreachable e) {
-                return BreachVerdict.unavailable(getId(), e.getMessage());
+                LOG.warn("Have I Been Pwned could not be consulted: " + e.getMessage() + ".");
+                return Outcome.UNAVAILABLE;
             }
             cache.put(prefix, suffixes);
         }
 
-        return suffixes.containsKey(suffix) ? BreachVerdict.found(getId()) : BreachVerdict.notFound(getId());
+        return suffixes.containsKey(suffix) ? Outcome.FOUND : Outcome.NOT_FOUND;
     }
 
     private Map<String, Long> fetch(String prefix, String key) throws Unreachable {
