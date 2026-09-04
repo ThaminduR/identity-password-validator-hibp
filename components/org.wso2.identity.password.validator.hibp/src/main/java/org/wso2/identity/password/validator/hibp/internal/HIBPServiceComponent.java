@@ -34,10 +34,7 @@ import org.wso2.carbon.identity.governance.IdentityGovernanceService;
 import org.wso2.carbon.identity.governance.common.IdentityConnectorConfig;
 import org.wso2.identity.password.validator.hibp.HIBPConnectorConfig;
 
-/**
- * Publishes the breach source. The connector's entire integration with the product is this one service
- * registration against a contract imported at its own compatibility range.
- */
+/** Publishes the breach source. That one service registration is the whole integration. */
 @Component(
         name = "identity.breach.hibp.component",
         immediate = true

@@ -19,8 +19,8 @@
 package org.wso2.identity.password.validator.hibp;
 
 /**
- * Signals that the corpus could not be consulted. This exception is internal to the connector.
- * {@code check} catches it and returns the decision the organization configured for a failure.
+ * Signals that the corpus could not be consulted. Internal to the connector: {@code check} catches it and
+ * applies the configured failure policy.
  */
 class Unreachable extends Exception {
 
@@ -34,9 +34,7 @@ class Unreachable extends Exception {
         this.retryable = retryable;
     }
 
-    /**
-     * @return false for a quota or rate limit, where a retry consumes more of the quota.
-     */
+    /** @return false for a quota or rate limit, where a retry only consumes more of it. */
     boolean isRetryable() {
 
         return retryable;

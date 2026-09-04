@@ -21,10 +21,7 @@ package org.wso2.identity.password.validator.hibp;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
-/**
- * Stops calling a service that has failed repeatedly, so that an outage does not make every password write
- * wait for the full timeout.
- */
+/** Stops calling a service that keeps failing, so an outage does not slow every password write. */
 class CircuitBreaker {
 
     private final int failureThreshold;
@@ -39,9 +36,7 @@ class CircuitBreaker {
         this.openMillis = openMillis;
     }
 
-    /**
-     * @return whether calls are currently being suppressed.
-     */
+    /** @return whether calls are currently suppressed. */
     boolean isOpen() {
 
         long opened = openedAt.get();

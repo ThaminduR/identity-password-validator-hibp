@@ -31,31 +31,27 @@ import java.util.Map;
 import java.util.Properties;
 
 /**
- * This connector's own configuration, published as a governance connector. It gives the connector a
- * per-organization set of settings and a Console presence. Both appear when the bundle is deployed and are
- * removed when it is removed.
+ * This connector's own configuration, published as a governance connector. It gives the connector
+ * per-organization settings and a Console presence, both tied to the bundle being deployed.
  */
 public class HIBPConnectorConfig implements IdentityConnectorConfig {
 
     /**
-     * This is not "hibp", and it is not a prefix of any property name below. When the connector name is a
-     * prefix of its property names, the management API collects them in one pass in arbitrary map order, and
-     * {@link #getPropertyNames()} no longer decides the order the Console renders.
+     * Not "hibp", and not a prefix of any property name below. When it is, the management API collects the
+     * properties in arbitrary map order and {@link #getPropertyNames()} stops deciding the rendered order.
      */
     public static final String CONNECTOR_NAME = "have-i-been-pwned";
     public static final String CATEGORY = "Password Security";
 
     /**
-     * The {@code __secret__} prefix is the platform's marker for a credential in connector configuration.
-     * It makes the Console render this property as a password field instead of a plain text box. The shipped
-     * Sift and ELK connectors use the same convention for their keys.
+     * The platform's marker for a credential, which makes the Console render a password field. The shipped
+     * Sift and ELK connectors use the same convention.
      */
     public static final String API_KEY = "__secret__hibp.apiKey";
 
     /**
-     * The value the API key property holds when no key is set. The Console's generic form marks every text
-     * field as required, so an empty value blocks submission of the whole form. This value is treated as
-     * absent wherever the key is read.
+     * What the key holds when there is none. The Console's form marks every text field required, so an empty
+     * value would block submitting it. Treated as absent wherever the key is read.
      */
     public static final String NO_API_KEY = "none";
     public static final String ENABLE = "hibp.enable";

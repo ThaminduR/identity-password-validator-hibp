@@ -41,10 +41,8 @@ import java.util.Map;
 
 /**
  * Checks a candidate against the Have I Been Pwned corpus without sending the password. Five characters of
- * the SHA-1 digest are sent, the service returns every suffix sharing that prefix, and the match is made here.
- * <p>
- * This connector is the reference implementation of the contract and is released separately from the
- * detection bundle.
+ * the SHA-1 digest are sent, the service returns every suffix sharing that prefix, and the match is made
+ * here. This is the reference implementation of the contract.
  */
 public class HIBPBreachSource implements BreachSource {
 
@@ -63,10 +61,7 @@ public class HIBPBreachSource implements BreachSource {
     public static final String PROPERTY_BREAKER_OPEN_SECONDS = "circuit_breaker_open_seconds";
 
     private static final String DEFAULT_BASE_URL = "https://api.pwnedpasswords.com/range/";
-    /**
-     * Shorter than the platform's action HTTP client default of 5000 ms. That default was chosen for a
-     * customer-hosted extension, not for a call made on every password write.
-     */
+    /** Shorter than the platform's 5000 ms action client default, which is not for a per-write call. */
     private static final int DEFAULT_READ_TIMEOUT_MS = 1500;
     private static final int DEFAULT_CONNECT_TIMEOUT_MS = 1000;
     private static final int DEFAULT_CACHE_TTL_SECONDS = 3600;
@@ -120,30 +115,21 @@ public class HIBPBreachSource implements BreachSource {
                 + readTimeoutMs + " ms, apiKey=" + (deploymentApiKey == null ? "not set" : "set") + ".");
     }
 
-    /**
-     * Whether this organization asked for this source. The value is held in this connector's own governance
-     * configuration, which is what an administrator edits in the Console.
-     */
+    /** Held in this connector's governance configuration, which is what the Console edits. */
     @Override
     public boolean isEnabled(String tenantDomain) {
 
         return Boolean.parseBoolean(readProperty(tenantDomain, HIBPConnectorConfig.ENABLE));
     }
 
-    /**
-     * Returns the key for this organization, or null. A tenant key takes precedence over the deployment
-     * key. A blank key is not a failure, because the range endpoint does not require authentication.
-     */
+    /** A tenant key wins over the deployment key. No key is fine: the range endpoint is unauthenticated. */
     private String resolveApiKey(String tenantDomain) {
 
         String configured = normalizeApiKey(readProperty(tenantDomain, HIBPConnectorConfig.API_KEY));
         return configured == null ? deploymentApiKey : configured;
     }
 
-    /**
-     * Decides whether a configured value is a key. A blank value and the
-     * {@link HIBPConnectorConfig#NO_API_KEY} placeholder both mean that no key is set.
-     */
+    /** Blank and the {@link HIBPConnectorConfig#NO_API_KEY} placeholder both mean no key. */
     static String normalizeApiKey(String value) {
 
         if (value == null) {
@@ -156,10 +142,7 @@ public class HIBPBreachSource implements BreachSource {
         return trimmed;
     }
 
-    /**
-     * Reads one of this connector's own settings for an organization. A store that cannot be read returns
-     * nothing, so the source stays off rather than assuming it is on.
-     */
+    /** A store that cannot be read returns nothing, so the source stays off rather than assuming on. */
     private String readProperty(String tenantDomain, String name) {
 
         try {
@@ -210,18 +193,13 @@ public class HIBPBreachSource implements BreachSource {
         return suffixes.containsKey(suffix) ? Decision.REFUSE_BREACHED : Decision.ACCEPT;
     }
 
-    /**
-     * The prefix is appended directly to this value, so a configured endpoint without a trailing separator
-     * would produce a path that does not exist.
-     */
+    /** The prefix is appended directly, so an endpoint without a trailing separator would 404. */
     private static String withTrailingSlash(String url) {
 
         return url.endsWith("/") ? url : url + "/";
     }
 
-    /**
-     * What to do with a password this connector could not check, as the organization configured it.
-     */
+    /** What to do with a password this connector could not check, as the organization configured it. */
     private Decision whenUnreachable(String tenantDomain) {
 
         String configured = readProperty(tenantDomain, HIBPConnectorConfig.REFUSE_WHEN_UNREACHABLE);
@@ -314,9 +292,7 @@ public class HIBPBreachSource implements BreachSource {
         return suffixes;
     }
 
-    /**
-     * Releases the API key and the cached ranges. Called when the connector bundle stops.
-     */
+    /** Releases the API key and the cached ranges. Called when the bundle stops. */
     public void shutdown() {
 
         deploymentApiKey = null;
