@@ -18,6 +18,7 @@
 
 package org.wso2.identity.password.validator.hibp;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -29,6 +30,7 @@ class CircuitBreaker {
 
     private final AtomicInteger consecutiveFailures = new AtomicInteger();
     private final AtomicLong openedAt = new AtomicLong();
+    private final AtomicBoolean probing = new AtomicBoolean();
 
     CircuitBreaker(int failureThreshold, long openMillis) {
 
@@ -36,32 +38,39 @@ class CircuitBreaker {
         this.openMillis = openMillis;
     }
 
-    /** @return whether calls are currently suppressed. */
+    /**
+     * @return whether calls are currently suppressed. A caller admitted while the breaker is open must
+     * report the outcome through {@link #recordSuccess()} or {@link #recordFailure()}, or the breaker stays
+     * suppressed until the next failure refreshes its window.
+     */
     boolean isOpen() {
 
         long opened = openedAt.get();
         if (opened == 0) {
             return false;
         }
-        if (System.currentTimeMillis() - opened >= openMillis) {
-            // Allow one call through to test whether the service has recovered.
-            openedAt.set(0);
-            consecutiveFailures.set(failureThreshold - 1);
-            return false;
+        if (System.currentTimeMillis() - opened < openMillis) {
+            return true;
         }
-        return true;
+        // The cooldown has passed. Admit exactly one caller to find out whether the service came back, and
+        // keep the rest suppressed until that caller reports. Admitting all of them would send the whole
+        // backlog at a service that has just been failing.
+        return !probing.compareAndSet(false, true);
     }
 
     void recordSuccess() {
 
         consecutiveFailures.set(0);
         openedAt.set(0);
+        probing.set(false);
     }
 
     void recordFailure() {
 
         if (consecutiveFailures.incrementAndGet() >= failureThreshold) {
-            openedAt.compareAndSet(0, System.currentTimeMillis());
+            // Refreshed on every failure past the threshold, so a continuing outage keeps the window open.
+            openedAt.set(System.currentTimeMillis());
         }
+        probing.set(false);
     }
 }

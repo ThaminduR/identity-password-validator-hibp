@@ -186,6 +186,10 @@ public class HIBPBreachSource implements BreachSource {
             } catch (Unreachable e) {
                 LOG.warn("Have I Been Pwned could not be consulted: " + e.getMessage() + ".");
                 return whenUnreachable(tenantDomain);
+            } catch (RuntimeException e) {
+                // An admitted caller must always report back, or the breaker would never probe again.
+                breaker.recordFailure();
+                throw e;
             }
             cache.put(prefix, suffixes);
         }

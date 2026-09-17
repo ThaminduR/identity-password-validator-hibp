@@ -20,7 +20,12 @@ package org.wso2.identity.password.validator.hibp;
 
 import org.testng.annotations.Test;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
 /**
@@ -59,5 +64,42 @@ public class CircuitBreakerTest {
         assertTrue(breaker.isOpen());
         Thread.sleep(100);
         assertFalse(breaker.isOpen());
+    }
+
+    /**
+     * The probe after the cooldown must admit exactly one caller. Admitting all of them sends the whole
+     * backlog at a service that has just been failing, which is the load the breaker exists to withhold.
+     */
+    @Test
+    public void theProbeAfterTheCooldownAdmitsExactlyOneCaller() throws InterruptedException {
+
+        CircuitBreaker breaker = new CircuitBreaker(2, 50);
+        breaker.recordFailure();
+        breaker.recordFailure();
+        assertTrue(breaker.isOpen());
+        Thread.sleep(120);
+
+        int threads = 50;
+        CountDownLatch start = new CountDownLatch(1);
+        CountDownLatch done = new CountDownLatch(threads);
+        AtomicInteger admitted = new AtomicInteger();
+        for (int i = 0; i < threads; i++) {
+            new Thread(() -> {
+                try {
+                    start.await();
+                    if (!breaker.isOpen()) {
+                        admitted.incrementAndGet();
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    done.countDown();
+                }
+            }).start();
+        }
+        start.countDown();
+        assertTrue(done.await(10, TimeUnit.SECONDS), "the probe threads did not finish");
+
+        assertEquals(admitted.get(), 1, "only one caller may probe the recovering service");
     }
 }
