@@ -57,8 +57,6 @@ public class HIBPBreachSource implements BreachSource {
     public static final String PROPERTY_CACHE_TTL_SECONDS = "cache_ttl_seconds";
     public static final String PROPERTY_CACHE_MAX_ENTRIES = "cache_max_entries";
     public static final String PROPERTY_RETRIES = "retries";
-    public static final String PROPERTY_BREAKER_THRESHOLD = "circuit_breaker_failures";
-    public static final String PROPERTY_BREAKER_OPEN_SECONDS = "circuit_breaker_open_seconds";
 
     private static final String DEFAULT_BASE_URL = "https://api.pwnedpasswords.com/range/";
     /** Shorter than the platform's 5000 ms action client default, which is not for a per-write call. */
@@ -67,8 +65,6 @@ public class HIBPBreachSource implements BreachSource {
     private static final int DEFAULT_CACHE_TTL_SECONDS = 3600;
     private static final int DEFAULT_CACHE_MAX_ENTRIES = 5000;
     private static final int DEFAULT_RETRIES = 1;
-    private static final int DEFAULT_BREAKER_THRESHOLD = 5;
-    private static final int DEFAULT_BREAKER_OPEN_SECONDS = 60;
 
     private static final String USER_AGENT = "WSO2-Identity-Server-Breach-Detection";
 
@@ -79,8 +75,6 @@ public class HIBPBreachSource implements BreachSource {
     private volatile int retries = DEFAULT_RETRIES;
     private volatile PrefixCache cache = new PrefixCache(DEFAULT_CACHE_MAX_ENTRIES,
             DEFAULT_CACHE_TTL_SECONDS * 1000L);
-    private volatile CircuitBreaker breaker = new CircuitBreaker(DEFAULT_BREAKER_THRESHOLD,
-            DEFAULT_BREAKER_OPEN_SECONDS * 1000L);
 
     @Override
     public String getId() {
@@ -107,9 +101,6 @@ public class HIBPBreachSource implements BreachSource {
 
         this.cache = new PrefixCache(configuration.getInt(PROPERTY_CACHE_MAX_ENTRIES, DEFAULT_CACHE_MAX_ENTRIES),
                 configuration.getInt(PROPERTY_CACHE_TTL_SECONDS, DEFAULT_CACHE_TTL_SECONDS) * 1000L);
-        this.breaker = new CircuitBreaker(
-                configuration.getInt(PROPERTY_BREAKER_THRESHOLD, DEFAULT_BREAKER_THRESHOLD),
-                configuration.getInt(PROPERTY_BREAKER_OPEN_SECONDS, DEFAULT_BREAKER_OPEN_SECONDS) * 1000L);
 
         LOG.info("The Have I Been Pwned connector was configured: endpoint=" + baseUrl + ", readTimeout="
                 + readTimeoutMs + " ms, apiKey=" + (deploymentApiKey == null ? "not set" : "set") + ".");
@@ -177,19 +168,11 @@ public class HIBPBreachSource implements BreachSource {
 
         Map<String, Long> suffixes = cache.get(prefix);
         if (suffixes == null) {
-            if (breaker.isOpen()) {
-                LOG.warn("Have I Been Pwned is not being called: suspended after repeated failures.");
-                return whenUnreachable(tenantDomain);
-            }
             try {
                 suffixes = fetch(prefix, resolveApiKey(tenantDomain));
             } catch (Unreachable e) {
                 LOG.warn("Have I Been Pwned could not be consulted: " + e.getMessage() + ".");
                 return whenUnreachable(tenantDomain);
-            } catch (RuntimeException e) {
-                // An admitted caller must always report back, or the breaker would never probe again.
-                breaker.recordFailure();
-                throw e;
             }
             cache.put(prefix, suffixes);
         }
@@ -215,9 +198,7 @@ public class HIBPBreachSource implements BreachSource {
         Unreachable last = null;
         for (int attempt = 0; attempt <= retries; attempt++) {
             try {
-                Map<String, Long> suffixes = request(prefix, key);
-                breaker.recordSuccess();
-                return suffixes;
+                return request(prefix, key);
             } catch (Unreachable e) {
                 last = e;
                 if (!e.isRetryable()) {
@@ -225,7 +206,6 @@ public class HIBPBreachSource implements BreachSource {
                 }
             }
         }
-        breaker.recordFailure();
         throw last == null ? new Unreachable("the corpus could not be reached", true) : last;
     }
 

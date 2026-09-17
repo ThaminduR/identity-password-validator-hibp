@@ -165,16 +165,16 @@ public class HIBPBreachSourceTest {
         assertEquals(source().check(candidate(BREACHED), TENANT), Decision.ACCEPT);
     }
 
+    /** Every attempt is bounded, so a failing endpoint costs a timeout per write and never hangs. */
     @Test
-    public void repeatedFailureOpensTheCircuitInsteadOfRetryingForever() throws Exception {
+    public void aFailingEndpointIsRetriedAtMostTheConfiguredNumberOfTimes() throws Exception {
 
         status = 503;
-        HIBPBreachSource source = source(config().set(HIBPBreachSource.PROPERTY_RETRIES, 0)
-                .set(HIBPBreachSource.PROPERTY_BREAKER_THRESHOLD, 2));
-        for (int i = 0; i < 2; i++) {
-            assertEquals(source.check(candidate("attempt" + i), TENANT), Decision.ACCEPT);
-        }
-        assertEquals(source.check(candidate("attempt-after-open"), TENANT), Decision.ACCEPT);
+        HIBPBreachSource source = source(config().set(HIBPBreachSource.PROPERTY_RETRIES, 1));
+
+        assertEquals(source.check(candidate(BREACHED), TENANT), Decision.ACCEPT);
+
+        assertEquals(requests.get(), 2, "one attempt plus one retry, and no more");
     }
 
     @Test

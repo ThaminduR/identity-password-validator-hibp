@@ -52,8 +52,6 @@ properties."sources.hibp.connect_timeout_ms" = 1000
 properties."sources.hibp.cache_ttl_seconds" = 3600
 properties."sources.hibp.cache_max_entries" = 5000
 properties."sources.hibp.retries" = 1
-properties."sources.hibp.circuit_breaker_failures" = 5
-properties."sources.hibp.circuit_breaker_open_seconds" = 60
 ```
 
 > **Quote the keys.** Written unquoted, as `properties.sources.hibp.read_timeout_ms`, the config parser
@@ -136,10 +134,13 @@ Range responses are cached by prefix, which is the only thing worth caching: a b
 is shared by every password in it. The candidate password and its full digest are never cache keys and never
 cache values.
 
-The call is bounded by an explicit timeout and a retry count, and repeated failure opens a circuit breaker so
-an outage costs the deployment one timeout rather than one per registration. Every one of those outcomes is
-reported as *unavailable* with a cause — timeout, transport, quota, parse — and never as *not found*. What
-that means for the password is the deployment's decision, not this connector's.
+The call is bounded by an explicit connect and read timeout and a retry count, so a failing endpoint costs a
+bounded wait per write and never hangs. Every failure — timeout, transport, quota, parse — is treated as
+*could not check* and never as *not found*. What that means for the password is the deployment's decision,
+not this connector's.
+
+> An outage currently costs that bounded wait on **every** password write. Suppressing the call after repeated
+> failures, so an outage costs one timeout rather than one per write, is deferred to a later iteration.
 
 ## Upgrading from 1.x
 
