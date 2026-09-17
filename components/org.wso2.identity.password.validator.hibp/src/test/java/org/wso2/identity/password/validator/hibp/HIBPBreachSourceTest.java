@@ -137,13 +137,14 @@ public class HIBPBreachSourceTest {
         assertEquals(source.check(candidate("PaddedOnly@1"), TENANT), Decision.ACCEPT);
     }
 
+    /** Nothing is held between calls, so each check is answered from a fresh range lookup. */
     @Test
-    public void aBucketIsFetchedOnceAndThenServedFromTheCache() throws Exception {
+    public void everyCheckConsultsTheCorpusRatherThanAnythingHeldInMemory() throws Exception {
 
         HIBPBreachSource source = source();
         source.check(candidate(BREACHED), TENANT);
         source.check(candidate(BREACHED), TENANT);
-        assertEquals(requests.get(), 1, "The bucket is stable for hours; refetching it buys nothing.");
+        assertEquals(requests.get(), 2);
     }
 
     /**

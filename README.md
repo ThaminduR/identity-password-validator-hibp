@@ -49,8 +49,6 @@ properties."sources.hibp.api_key" = "$secret{hibp_api_key}"   # optional; vault-
 properties."sources.hibp.base_url" = "https://api.pwnedpasswords.com/range/"
 properties."sources.hibp.read_timeout_ms" = 1500
 properties."sources.hibp.connect_timeout_ms" = 1000
-properties."sources.hibp.cache_ttl_seconds" = 3600
-properties."sources.hibp.cache_max_entries" = 5000
 properties."sources.hibp.retries" = 1
 ```
 
@@ -130,9 +128,13 @@ that bucket — roughly eight hundred of them — and the match is made locally,
 answer to its own query. `Add-Padding` is sent on every request so the response size does not reveal how many
 entries a bucket holds.
 
-Range responses are cached by prefix, which is the only thing worth caching: a bucket is stable for hours and
-is shared by every password in it. The candidate password and its full digest are never cache keys and never
-cache values.
+Nothing is held between calls. Each check is answered from a fresh range lookup, so the connector keeps no
+password material in memory at all.
+
+> Range responses are cacheable in principle — a bucket is stable for hours and is shared by every password in
+> it — but caching is deferred to a later iteration. A five-character prefix covers one of 1,048,576 buckets
+> and each one costs about 116 KB to hold, so a cache large enough to hit usefully does not fit the heap. If
+> it comes back it must be sized for a resubmitted password, not for a shared corpus.
 
 The call is bounded by an explicit connect and read timeout and a retry count, so a failing endpoint costs a
 bounded wait per write and never hangs. Every failure — timeout, transport, quota, parse — is treated as

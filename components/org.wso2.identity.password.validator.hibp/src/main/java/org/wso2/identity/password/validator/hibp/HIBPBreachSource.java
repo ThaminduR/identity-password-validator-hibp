@@ -54,16 +54,12 @@ public class HIBPBreachSource implements BreachSource {
     public static final String PROPERTY_BASE_URL = "base_url";
     public static final String PROPERTY_READ_TIMEOUT_MS = "read_timeout_ms";
     public static final String PROPERTY_CONNECT_TIMEOUT_MS = "connect_timeout_ms";
-    public static final String PROPERTY_CACHE_TTL_SECONDS = "cache_ttl_seconds";
-    public static final String PROPERTY_CACHE_MAX_ENTRIES = "cache_max_entries";
     public static final String PROPERTY_RETRIES = "retries";
 
     private static final String DEFAULT_BASE_URL = "https://api.pwnedpasswords.com/range/";
     /** Shorter than the platform's 5000 ms action client default, which is not for a per-write call. */
     private static final int DEFAULT_READ_TIMEOUT_MS = 1500;
     private static final int DEFAULT_CONNECT_TIMEOUT_MS = 1000;
-    private static final int DEFAULT_CACHE_TTL_SECONDS = 3600;
-    private static final int DEFAULT_CACHE_MAX_ENTRIES = 5000;
     private static final int DEFAULT_RETRIES = 1;
 
     private static final String USER_AGENT = "WSO2-Identity-Server-Breach-Detection";
@@ -73,8 +69,6 @@ public class HIBPBreachSource implements BreachSource {
     private volatile int readTimeoutMs = DEFAULT_READ_TIMEOUT_MS;
     private volatile int connectTimeoutMs = DEFAULT_CONNECT_TIMEOUT_MS;
     private volatile int retries = DEFAULT_RETRIES;
-    private volatile PrefixCache cache = new PrefixCache(DEFAULT_CACHE_MAX_ENTRIES,
-            DEFAULT_CACHE_TTL_SECONDS * 1000L);
 
     @Override
     public String getId() {
@@ -98,9 +92,6 @@ public class HIBPBreachSource implements BreachSource {
         this.retries = Math.max(0, configuration.getInt(PROPERTY_RETRIES, DEFAULT_RETRIES));
 
         this.deploymentApiKey = normalizeApiKey(configuration.getString(PROPERTY_API_KEY).orElse(null));
-
-        this.cache = new PrefixCache(configuration.getInt(PROPERTY_CACHE_MAX_ENTRIES, DEFAULT_CACHE_MAX_ENTRIES),
-                configuration.getInt(PROPERTY_CACHE_TTL_SECONDS, DEFAULT_CACHE_TTL_SECONDS) * 1000L);
 
         LOG.info("The Have I Been Pwned connector was configured: endpoint=" + baseUrl + ", readTimeout="
                 + readTimeoutMs + " ms, apiKey=" + (deploymentApiKey == null ? "not set" : "set") + ".");
@@ -166,15 +157,12 @@ public class HIBPBreachSource implements BreachSource {
         // Only the prefix is sent. The suffix is compared here.
         String suffix = digest.substring(5);
 
-        Map<String, Long> suffixes = cache.get(prefix);
-        if (suffixes == null) {
-            try {
-                suffixes = fetch(prefix, resolveApiKey(tenantDomain));
-            } catch (Unreachable e) {
-                LOG.warn("Have I Been Pwned could not be consulted: " + e.getMessage() + ".");
-                return whenUnreachable(tenantDomain);
-            }
-            cache.put(prefix, suffixes);
+        Map<String, Long> suffixes;
+        try {
+            suffixes = fetch(prefix, resolveApiKey(tenantDomain));
+        } catch (Unreachable e) {
+            LOG.warn("Have I Been Pwned could not be consulted: " + e.getMessage() + ".");
+            return whenUnreachable(tenantDomain);
         }
 
         return suffixes.containsKey(suffix) ? Decision.REFUSE_BREACHED : Decision.ACCEPT;
@@ -276,11 +264,10 @@ public class HIBPBreachSource implements BreachSource {
         return suffixes;
     }
 
-    /** Releases the API key and the cached ranges. Called when the bundle stops. */
+    /** Releases the API key. Called when the bundle stops. */
     public void shutdown() {
 
         deploymentApiKey = null;
-        cache.clear();
     }
 
 }
