@@ -28,25 +28,40 @@ Restart the server. The connector registers itself; there is no configuration fi
 The server log records the bound sources and their priorities on startup:
 
 ```
-Breach source bound: id=hibp, priority=500, capabilities=[REMOTE, PASSWORD_ONLY]
+Breach source bound: id=hibp, priority=500. Bound sources are now [localList@100, hibp@500].
+The Have I Been Pwned connector was configured: endpoint=https://api.pwnedpasswords.com/range/,
+readTimeout=1500 ms, apiKey=not set.
 ```
 
 ## Configuration
 
-Operator settings go under this source's namespace in `deployment.toml`. Every key is optional.
+Operator settings are properties of the breach detection listener in `deployment.toml`, named
+`sources.hibp.<property>`. Every key is optional.
 
 ```toml
-[breach_detection.sources.hibp]
-api_key = "$secret{hibp_api_key}"   # optional; vault-resolved, never returned by any API
-base_url = "https://api.pwnedpasswords.com/range/"
-read_timeout_ms = 1500
-connect_timeout_ms = 1000
-cache_ttl_seconds = 3600
-cache_max_entries = 5000
-retries = 1
-circuit_breaker_failures = 5
-circuit_breaker_open_seconds = 60
+[[event_listener]]
+id = "breach_detection"
+type = "org.wso2.carbon.user.core.listener.UserOperationEventListener"
+name = "org.wso2.carbon.identity.breach.detection.listener.BreachDetectionListener"
+order = 420
+enable = true
+properties."sources.hibp.api_key" = "$secret{hibp_api_key}"   # optional; vault-resolved, never returned by any API
+properties."sources.hibp.base_url" = "https://api.pwnedpasswords.com/range/"
+properties."sources.hibp.read_timeout_ms" = 1500
+properties."sources.hibp.connect_timeout_ms" = 1000
+properties."sources.hibp.cache_ttl_seconds" = 3600
+properties."sources.hibp.cache_max_entries" = 5000
+properties."sources.hibp.retries" = 1
+properties."sources.hibp.circuit_breaker_failures" = 5
+properties."sources.hibp.circuit_breaker_open_seconds" = 60
 ```
+
+> **Quote the keys.** Written unquoted, as `properties.sources.hibp.read_timeout_ms`, the config parser
+> renders the whole group as a single property holding a map and this connector never receives it. The server
+> logs a warning naming the key it ignored.
+
+The `$secret{alias}` value is resolved by the config parser before it reaches the connector, so the alias
+text never enters this bundle.
 
 Whether the source is consulted is this connector's own per-organization setting, published as a governance
 connector under **Password Security**. Because the connector publishes it, the setting appears in the Console
@@ -155,6 +170,8 @@ bundleContext.registerService(BreachSource.class, new MySource(), null);
 ```
 
 The contract is versioned on its own compatibility rather than on the product's release number, so a connector
-importing `[1.0,2.0)` keeps resolving across product minors and majors. Everything but `getId`,
-`getDescriptor` and `evaluate` has a default, and the contract gains default methods rather than abstract
-ones, so an existing connector keeps compiling across additive revisions.
+importing `[1.0,2.0)` keeps resolving across product minors and majors.
+
+All five methods are abstract: `getId`, `getPriority`, `configure`, `isEnabled` and `check`. The interface was
+reduced to what the engine actually calls, so there is nothing optional left to default. An additive revision
+would add a default method rather than an abstract one, so an existing connector keeps compiling.
