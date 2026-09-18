@@ -40,9 +40,11 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Checks a candidate against the Have I Been Pwned corpus without sending the password. Five characters of
- * the SHA-1 digest are sent, the service returns every suffix sharing that prefix, and the match is made
- * here. This is the reference implementation of the contract.
+ * Breach source backed by the Have I Been Pwned range API.
+ * <p>
+ * The password is never sent. Five characters of its SHA-1 digest go to the service, which returns every
+ * suffix sharing that prefix, and the match is made here. This is the reference implementation of the
+ * contract.
  */
 public class HIBPBreachSource implements BreachSource {
 
@@ -70,19 +72,35 @@ public class HIBPBreachSource implements BreachSource {
     private volatile int connectTimeoutMs = DEFAULT_CONNECT_TIMEOUT_MS;
     private volatile int retries = DEFAULT_RETRIES;
 
+    /**
+     * Get the id this source is configured under.
+     *
+     * @return The source id.
+     */
     @Override
     public String getId() {
 
         return SOURCE_ID;
     }
 
+    /**
+     * Get the call order hint. Above an in-process source and below a slower remote one, so an offline list
+     * answers first and this connector is only reached for a password that list accepted.
+     *
+     * @return The priority.
+     */
     @Override
     public int getPriority() {
 
-        // Called after an in-process source and before a slower remote one.
         return 500;
     }
 
+    /**
+     * Read the deployment settings. Per-organization policy is not read here. It lives in this connector's
+     * governance configuration and is resolved on every call instead.
+     *
+     * @param configuration Resolved deployment settings for this source.
+     */
     @Override
     public void configure(SourceConfiguration configuration) {
 
@@ -97,16 +115,23 @@ public class HIBPBreachSource implements BreachSource {
                 + readTimeoutMs + " ms, apiKey=" + (deploymentApiKey == null ? "not set" : "set") + ".");
     }
 
-    /** Held in this connector's governance configuration, which is what the Console edits. */
+    /**
+     * Report whether this organization wants the source consulted. The setting is held in this connector's
+     * own governance configuration, which is what the Console edits. A store that cannot be read reports
+     * false, so the source stays off rather than assuming on.
+     *
+     * @param tenantDomain Organization the write belongs to.
+     * @return True when the organization enabled this source.
+     */
     @Override
     public boolean isEnabled(String tenantDomain) {
 
         return Boolean.parseBoolean(readProperty(tenantDomain, HIBPConnectorConfig.ENABLE));
     }
 
-    /** A tenant key wins over the deployment key. No key is fine: the range endpoint is unauthenticated. */
     private String resolveApiKey(String tenantDomain) {
 
+        // A tenant key wins over the deployment key. No key is fine: the range endpoint is unauthenticated.
         String configured = normalizeApiKey(readProperty(tenantDomain, HIBPConnectorConfig.API_KEY));
         return configured == null ? deploymentApiKey : configured;
     }
@@ -124,9 +149,9 @@ public class HIBPBreachSource implements BreachSource {
         return trimmed;
     }
 
-    /** A store that cannot be read returns nothing, so the source stays off rather than assuming on. */
     private String readProperty(String tenantDomain, String name) {
 
+        // A store that cannot be read returns nothing, so the source stays off rather than assuming on.
         try {
             if (HIBPDataHolder.getInstance().getIdentityGovernanceService() == null) {
                 return null;
@@ -149,6 +174,15 @@ public class HIBPBreachSource implements BreachSource {
         return null;
     }
 
+    /**
+     * Hash the candidate, send only the first five characters of the digest, and match the remainder
+     * locally. The password and its full digest never leave the deployment.
+     *
+     * @param credential   Candidate password.
+     * @param tenantDomain Organization the write belongs to, used to resolve the failure policy.
+     * @return {@link Decision#REFUSE_BREACHED} when the corpus holds the password, otherwise the
+     * organization's configured answer for a corpus that could not be reached.
+     */
     @Override
     public Decision check(Credential credential, String tenantDomain) {
 
@@ -168,13 +202,12 @@ public class HIBPBreachSource implements BreachSource {
         return suffixes.containsKey(suffix) ? Decision.REFUSE_BREACHED : Decision.ACCEPT;
     }
 
-    /** The prefix is appended directly, so an endpoint without a trailing separator would 404. */
     private static String withTrailingSlash(String url) {
 
+        // The prefix is appended directly, so an endpoint without a trailing separator would 404.
         return url.endsWith("/") ? url : url + "/";
     }
 
-    /** What to do with a password this connector could not check, as the organization configured it. */
     private Decision whenUnreachable(String tenantDomain) {
 
         String configured = readProperty(tenantDomain, HIBPConnectorConfig.REFUSE_WHEN_UNREACHABLE);

@@ -20,7 +20,11 @@ package org.wso2.identity.password.validator.hibp.internal;
 
 import org.wso2.carbon.identity.governance.IdentityGovernanceService;
 
-/** Holds the services this connector needs, chiefly the governance service its settings live in. */
+/**
+ * Have I Been Pwned connector data holder.
+ * <p>
+ * Holds the services this connector needs, chiefly the governance service its settings live in.
+ */
 public class HIBPDataHolder {
 
     private static final HIBPDataHolder INSTANCE = new HIBPDataHolder();
@@ -31,16 +35,27 @@ public class HIBPDataHolder {
 
     }
 
+    /**
+     * @return the shared instance.
+     */
     public static HIBPDataHolder getInstance() {
 
         return INSTANCE;
     }
 
+    /**
+     * @return the governance service, or null when it is not bound. A caller must handle null rather than
+     * assume the source is enabled.
+     */
     public IdentityGovernanceService getIdentityGovernanceService() {
 
         return identityGovernanceService;
     }
 
+    /**
+     * @param identityGovernanceService the service holding this connector's per-organization settings, or
+     *                                  null when it is unbound.
+     */
     public void setIdentityGovernanceService(IdentityGovernanceService identityGovernanceService) {
 
         this.identityGovernanceService = identityGovernanceService;

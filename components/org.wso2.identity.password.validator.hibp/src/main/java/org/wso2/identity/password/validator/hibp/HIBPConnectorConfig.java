@@ -31,8 +31,10 @@ import java.util.Map;
 import java.util.Properties;
 
 /**
- * This connector's own configuration, published as a governance connector. It gives the connector
- * per-organization settings and a Console presence, both tied to the bundle being deployed.
+ * Governance connector configuration for the Have I Been Pwned breach source.
+ * <p>
+ * Publishing this gives the connector per-organization settings and a Console presence, both tied to the
+ * bundle being deployed.
  */
 public class HIBPConnectorConfig implements IdentityConnectorConfig {
 
@@ -57,36 +59,54 @@ public class HIBPConnectorConfig implements IdentityConnectorConfig {
     public static final String ENABLE = "hibp.enable";
     public static final String REFUSE_WHEN_UNREACHABLE = "hibp.refuseWhenUnreachable";
 
+    /**
+     * @return the connector id the management API and Console address it by.
+     */
     @Override
     public String getName() {
 
         return CONNECTOR_NAME;
     }
 
+    /**
+     * @return the label shown in the Console.
+     */
     @Override
     public String getFriendlyName() {
 
         return "Have I Been Pwned";
     }
 
+    /**
+     * @return the Console category this connector appears under.
+     */
     @Override
     public String getCategory() {
 
         return CATEGORY;
     }
 
+    /**
+     * @return the sub-category. This connector uses the default.
+     */
     @Override
     public String getSubCategory() {
 
         return "DEFAULT";
     }
 
+    /**
+     * @return the ordering hint within the category.
+     */
     @Override
     public int getOrder() {
 
         return 0;
     }
 
+    /**
+     * @return the label shown for each property.
+     */
     @Override
     public Map<String, String> getPropertyNameMapping() {
 
@@ -98,6 +118,9 @@ public class HIBPConnectorConfig implements IdentityConnectorConfig {
         return names;
     }
 
+    /**
+     * @return the hint shown under each property.
+     */
     @Override
     public Map<String, String> getPropertyDescriptionMapping() {
 
@@ -111,12 +134,20 @@ public class HIBPConnectorConfig implements IdentityConnectorConfig {
         return descriptions;
     }
 
+    /**
+     * @return the properties, in the order the Console renders them.
+     */
     @Override
     public String[] getPropertyNames() {
 
         return new String[] { ENABLE, API_KEY, REFUSE_WHEN_UNREACHABLE };
     }
 
+    /**
+     * Off by default, so installing the bundle changes nothing until an organization opts in.
+     *
+     * @return the defaults for an organization that has stored none.
+     */
     @Override
     public Properties getDefaultPropertyValues(String tenantDomain) throws IdentityGovernanceException {
 
@@ -130,6 +161,9 @@ public class HIBPConnectorConfig implements IdentityConnectorConfig {
         return defaults;
     }
 
+    /**
+     * @return the defaults for the named properties only. Anything unrecognised is left out.
+     */
     @Override
     public Map<String, String> getDefaultPropertyValues(String[] propertyNames, String tenantDomain)
             throws IdentityGovernanceException {
@@ -146,12 +180,18 @@ public class HIBPConnectorConfig implements IdentityConnectorConfig {
         return defaults;
     }
 
+    /**
+     * @return the properties never returned by the management API. The API key is the only one.
+     */
     @Override
     public List<String> getConfidentialPropertyValues(String tenantDomain) {
 
         return Collections.singletonList(API_KEY);
     }
 
+    /**
+     * @return the data type of each property, which is what decides the control the Console renders.
+     */
     @Override
     public Map<String, Property> getMetaData() {
 

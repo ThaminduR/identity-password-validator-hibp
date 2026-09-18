@@ -34,7 +34,12 @@ import org.wso2.carbon.identity.governance.IdentityGovernanceService;
 import org.wso2.carbon.identity.governance.common.IdentityConnectorConfig;
 import org.wso2.identity.password.validator.hibp.HIBPConnectorConfig;
 
-/** Publishes the breach source. That one service registration is the whole integration. */
+/**
+ * Have I Been Pwned breach source service component.
+ * <p>
+ * Publishing the breach source is the whole integration; the connector is reached through that service and
+ * nothing else.
+ */
 @Component(
         name = "identity.breach.hibp.component",
         immediate = true
@@ -47,6 +52,9 @@ public class HIBPServiceComponent {
     private ServiceRegistration<IdentityConnectorConfig> connectorRegistration;
     private HIBPBreachSource source;
 
+    /**
+     * Registers the breach source and this connector's own governance configuration.
+     */
     @Activate
     protected void activate(ComponentContext context) {
 
@@ -59,6 +67,9 @@ public class HIBPServiceComponent {
         LOG.info("The Have I Been Pwned breach source connector is registered.");
     }
 
+    /**
+     * Unregisters both services and releases the API key the source is holding.
+     */
     @Deactivate
     protected void deactivate(ComponentContext context) {
 
@@ -84,11 +95,17 @@ public class HIBPServiceComponent {
             policy = ReferencePolicy.DYNAMIC,
             unbind = "unsetIdentityGovernanceService"
     )
+    /**
+     * Binds the service this connector reads its per-organization settings from.
+     */
     protected void setIdentityGovernanceService(IdentityGovernanceService service) {
 
         HIBPDataHolder.getInstance().setIdentityGovernanceService(service);
     }
 
+    /**
+     * Clears the reference, after which the source reports itself not enabled rather than assuming on.
+     */
     protected void unsetIdentityGovernanceService(IdentityGovernanceService service) {
 
         HIBPDataHolder.getInstance().setIdentityGovernanceService(null);

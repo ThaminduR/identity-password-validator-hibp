@@ -19,8 +19,9 @@
 package org.wso2.identity.password.validator.hibp;
 
 /**
- * Signals that the corpus could not be consulted. Internal to the connector: {@code check} catches it and
- * applies the configured failure policy.
+ * Signals that the breach corpus could not be consulted.
+ * <p>
+ * Internal to this connector. {@code check} catches it and applies the configured failure policy.
  */
 class Unreachable extends Exception {
 
@@ -28,6 +29,10 @@ class Unreachable extends Exception {
 
     private final boolean retryable;
 
+    /**
+     * @param message  an operator-facing reason. Never carries the credential or a full digest.
+     * @param retryable whether trying again could succeed.
+     */
     Unreachable(String message, boolean retryable) {
 
         super(message);
