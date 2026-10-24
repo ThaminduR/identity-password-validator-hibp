@@ -10,8 +10,9 @@ corpus, or to say clearly that it could not tell.
 
 ## Requirements
 
-- WSO2 Identity Server with breached credential detection (the `org.wso2.carbon.identity.breach.detection`
-  bundles) present.
+- WSO2 Identity Server with breached credential detection 1.0.0 or later (the
+  `org.wso2.carbon.identity.breach.detection` bundle) installed, and its `breach_detection` event listener enabled
+  in `deployment.toml` (see *Configuration*). Without the listener nothing calls this source.
 - Maven 3.x, JDK 11 or higher.
 - No API key. The Pwned Passwords range endpoint requires no authentication. A key is supported for
   subscribers, and a missing one is never treated as a reason to stop checking.
@@ -153,12 +154,17 @@ credential-write path, so it could not refuse a password being set. 2.0 replaces
 |---|---|
 | `/hibp` servlet taking a plaintext password | Removed. Nothing here accepts a password from a caller. |
 | `[[resource.access_control]]` with `secure = false` | No longer required, and should be removed. |
-| `hibp.password.validator.*` governance connector | Replaced by `breachDetection.*`, which covers every source. |
+| `hibp.password.validator` governance connector (`hibp.password.validator.enable`, `hibp.password.validator.api.key`) | Replaced by the `have-i-been-pwned` connector (`hibp.enable`, `__secret__hibp.apiKey`, `hibp.refuseWhenUnreachable`). Values are not migrated. |
 | Blank API key reported every password as clean, while presenting as enabled | The range endpoint needs no key; a missing key changes nothing. |
 | No enforcement | Enforced by the product's listener on every password-setting path. |
 
 **If you are running 1.x, remove the `(.*)/hibp(.*)` access-control entry from `deployment.toml`.** While it is
 present, the 1.x servlet accepts a plaintext password from an unauthenticated caller.
+
+**Re-enable the connector in every organization that used 1.x.** 2.0 reads new property names and `hibp.enable`
+defaults to `false`, so an organization that had 1.x switched on is not checked after the upgrade until it is
+switched on again. Re-enter the API key too, if one was set, or move it to `sources.hibp.api_key` in
+`deployment.toml`. The old `hibp.password.validator.*` values stay in the governance store but nothing reads them.
 
 The live "check as you type" behaviour the 1.x servlet existed for is deliberately not reintroduced. A browser
 that wants it can query the range endpoint directly with a hash prefix, so Identity Server never sees the
