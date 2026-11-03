@@ -105,8 +105,9 @@ password material in memory at all.
 > it comes back it must be sized for a resubmitted password, not for a shared corpus.
 
 The call is bounded by an explicit connect and read timeout and a retry count, so a failing endpoint costs a
-bounded wait per write and never hangs. Every failure — timeout, transport, quota, parse — is treated as
-*could not check* and never as *not found*. What that means for the password is the deployment's decision,
+bounded wait per write and never hangs. Every failure — timeout, transport, quota, parse, or an unexpected
+error inside the connector — is treated as *could not check* and never as *not found*. An unexpected error is
+handled here rather than left to the product, which would accept the password whatever the organization chose. What that means for the password is the deployment's decision,
 not this connector's.
 
 > With the default policy, an outage refuses every password write in an organization that enabled this

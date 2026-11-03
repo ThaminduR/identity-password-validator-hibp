@@ -191,6 +191,24 @@ public class HIBPBreachSourceTest {
         assertEquals(source().check(candidate(BREACHED), TENANT), Decision.REFUSE_UNVERIFIED);
     }
 
+    /**
+     * A failure inside the connector gets the organization's failure policy. Escaping to the engine would
+     * accept the password, even where the organization chose to refuse.
+     */
+    @Test
+    public void anUnexpectedFailureAppliesTheFailurePolicyRatherThanEscaping() {
+
+        Credential cleared = candidate(BREACHED);
+        cleared.clear();
+
+        // No policy stored, so the default, refuse.
+        assertEquals(source().check(cleared, TENANT), Decision.REFUSE_UNVERIFIED);
+
+        governance(HIBPConnectorConfig.REFUSE_WHEN_UNREACHABLE, "false");
+        assertEquals(source().check(cleared, TENANT), Decision.ACCEPT);
+        assertEquals(requests.get(), 0, "The failure came before any call, so none was made.");
+    }
+
     /** The match does not depend on the case the digest helper produces. */
     @Test
     public void aLowercaseSuffixStillMatchesTheUppercaseRange() {

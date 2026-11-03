@@ -164,10 +164,23 @@ public class HIBPBreachSource implements BreachSource {
      * @param credential   Candidate password.
      * @param tenantDomain Organization the write belongs to, used to resolve the failure policy.
      * @return {@link Decision#REFUSE_BREACHED} when the corpus holds the password, otherwise the
-     * organization's configured answer for a corpus that could not be reached.
+     * organization's configured answer for a corpus that could not be reached. A failure inside this
+     * connector gets that same answer, rather than escaping to the engine, which would accept the password.
      */
     @Override
     public Decision check(Credential credential, String tenantDomain) {
+
+        try {
+            return lookUp(credential, tenantDomain);
+        } catch (RuntimeException | LinkageError e) {
+            // LinkageError too, because a mismatch with the contract surfaces as one once this code is running.
+            LOG.error("Have I Been Pwned failed unexpectedly while checking a password. The organization's "
+                    + "failure policy applies.", e);
+            return whenUnreachable(tenantDomain);
+        }
+    }
+
+    private Decision lookUp(Credential credential, String tenantDomain) {
 
         String digest = credential.digestHex("SHA-1");
         String prefix = digest.substring(0, 5);
@@ -179,9 +192,7 @@ public class HIBPBreachSource implements BreachSource {
             suffixes = client.fetchRange(prefix);
         } catch (Unreachable e) {
             LOG.warn("Have I Been Pwned could not be consulted: " + e.getMessage() + ".");
-            // The failure policy is read only when it is needed, so a write normally costs one read.
-            return whenUnreachable(readProperties(tenantDomain, HIBPConnectorConfig.REFUSE_WHEN_UNREACHABLE)
-                    .get(HIBPConnectorConfig.REFUSE_WHEN_UNREACHABLE));
+            return whenUnreachable(tenantDomain);
         }
 
         return isListed(suffixes, suffix) ? Decision.REFUSE_BREACHED : Decision.ACCEPT;
@@ -195,10 +206,12 @@ public class HIBPBreachSource implements BreachSource {
         return suffixes.containsKey(suffix.toUpperCase(Locale.ROOT));
     }
 
-    private static Decision whenUnreachable(String configured) {
+    private Decision whenUnreachable(String tenantDomain) {
 
-        // A policy that cannot be read takes the default, refuse, so a store failure during an outage does
-        // not let the password through.
+        // Read only when needed, so a write normally costs one read. A policy that cannot be read takes the
+        // default, refuse, so a store failure during an outage does not let the password through.
+        String configured = readProperties(tenantDomain, HIBPConnectorConfig.REFUSE_WHEN_UNREACHABLE)
+                .get(HIBPConnectorConfig.REFUSE_WHEN_UNREACHABLE);
         boolean refuse = configured == null || Boolean.parseBoolean(configured.trim());
         return refuse ? Decision.REFUSE_UNVERIFIED : Decision.ACCEPT;
     }
