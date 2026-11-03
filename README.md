@@ -1,76 +1,156 @@
-# WSO2 Identity Server - Have I Been Pwned Password Validator
+# WSO2 Identity Server - Have I Been Pwned Breach Source
 
-A password validator extension for WSO2 Identity Server that integrates with the [Have I Been Pwned (HIBP)](https://haveibeenpwned.com/) service to check if passwords have been exposed in data breaches.
+A breach-intelligence source for WSO2 Identity Server that checks candidate passwords against the
+[Have I Been Pwned](https://haveibeenpwned.com/) Pwned Passwords corpus.
 
-## Overview
+It implements the `BreachSource` contract published by Identity Server's breached credential detection, and
+registers itself as an OSGi service. Enforcement, ordering, failure policy, telemetry and user-facing
+messaging all belong to the product; this connector's only job is to answer whether a password is in the
+corpus, or to say clearly that it could not tell.
 
-This extension enhances the security of WSO2 Identity Server by preventing users from setting passwords that have been found in known data breaches. The validator leverages the Have I Been Pwned API, which employs a k-anonymity model to securely check passwords without sending the actual password over the network.
+## Requirements
 
-## Features
-
-- Validates user passwords against the HIBP database of compromised passwords
-- Uses secure k-anonymity model (only the first 5 characters of the password hash are sent to the API)
-- Configurable through the WSO2 Identity Server management console
-- Supports multi-tenancy
-- Provides API key configuration for authenticated access to the HIBP service
-
-## Prerequisites
-
-- WSO2 Identity Server (tested with version 5.10.0+)
-- Maven 3.x
-- Java 1.8 or higher
-- A valid API key for the HIBP service (obtain from [haveibeenpwned.com](https://haveibeenpwned.com/API/Key))
+- WSO2 Identity Server with breached credential detection 1.0.0 or later (the
+  `org.wso2.carbon.identity.breach.detection` bundle) installed, and its `breach_detection` event listener enabled
+  in `deployment.toml` (see *Configuration*). Without the listener nothing calls this source.
+- Maven 3.x, JDK 11 or higher.
+- No API key. The Pwned Passwords range endpoint is free and requires no authentication, so the connector
+  takes no key and sends none.
 
 ## Installation
 
-1. Build the extension using Maven:
-   ```bash
-   mvn clean install
-   ```
+```bash
+mvn clean install
+cp components/org.wso2.identity.password.validator.hibp/target/org.wso2.identity.password.validator.hibp.component-*.jar \
+   <IS-HOME>/repository/components/dropins/
+```
 
-2. Copy the generated JAR file to the WSO2 Identity Server:
-   ```
-   cp target/org.wso2.identity.password.validator.hibp-1.0.0.jar <IS-HOME>/repository/components/dropins/
-   ```
+Restart the server. The connector registers itself; there is no configuration file to edit for it to appear.
+The server log records the bound sources and their priorities on startup:
 
-3. Add the following configuration to `<IS-HOME>/repository/conf/deployment.toml` to allow access to the HIBP endpoint:
-   ```
-   [[resource.access_control]]
-   context = "(.*)/hibp(.*)"
-   secure = false
-   http_method = "all"
-   ```
-   
-   **Note:** For versions of WSO2 IS using `identity.xml.j2`, add this instead:
-   ```
-   <Resource context="(.*)/hibp(.*)" secured="false" http-method="all"/>
-   ```
-
-4. Restart the WSO2 Identity Server.
+```
+Breach source bound: id=hibp, priority=500. Bound sources are now [localList@100, hibp@500].
+The Have I Been Pwned connector was configured: endpoint=https://api.pwnedpasswords.com/range/,
+readTimeout=1500 ms.
+```
 
 ## Configuration
 
-1. Log into the WSO2 Identity Server Management Console.
-2. Navigate to **Main** > **Identity** > **Identity Providers** > **Resident** > **Password Policies**.
-3. Find the **Pwned Passwords** section.
-4. Enable the HIBP password validator by checking the box.
-5. Enter your HIBP API key in the designated field.
-6. Save your changes.
+Operator settings are properties of the breach detection listener in `deployment.toml`, named
+`sources.hibp.<property>`. Every key is optional.
 
-## How it Works
+```toml
+[[event_listener]]
+id = "breach_detection"
+type = "org.wso2.carbon.user.core.listener.UserOperationEventListener"
+name = "org.wso2.carbon.identity.breach.detection.listener.BreachDetectionListener"
+order = 420
+enable = true
+properties."sources.hibp.base_url" = "https://api.pwnedpasswords.com/range/"
+properties."sources.hibp.read_timeout_ms" = 1500
+properties."sources.hibp.connect_timeout_ms" = 1000
+properties."sources.hibp.retries" = 1
+```
 
-When a user attempts to create or change a password, the following process occurs:
+> **Quote the keys.** Written unquoted, as `properties.sources.hibp.read_timeout_ms`, the config parser
+> renders the whole group as a single property holding a map and this connector never receives it. The server
+> logs a warning naming the key it ignored.
 
-1. The password is hashed using SHA-1 (as required by the HIBP API).
-2. Only the first 5 characters of the hash are sent to the HIBP API.
-3. The API returns a list of hash suffixes (remaining 35 characters) that match the provided prefix.
-4. The extension checks if the full hash of the user's password matches any in the returned list.
-5. If a match is found, the password is rejected as it has appeared in known data breaches.
+The `$secret{alias}` value is resolved by the config parser before it reaches the connector, so the alias
+text never enters this bundle.
 
-## License
+Whether the source is consulted is this connector's own per-organization setting, published as a governance
+connector under **Password Security**. Because the connector publishes it, the setting appears in the Console
+when this bundle is installed and disappears when it is removed - no product change is involved either way.
 
-This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.
+| Setting | Default | Meaning |
+|---|---|---|
+| `hibp.enable` | `false` | Consult this source for the organization. |
+| `hibp.refuseWhenUnreachable` | `true` | Refuse the password when this service cannot answer, rather than letting it through. Switch it off to let passwords through during an outage. |
 
-## Support
+```http
+PATCH /api/server/v1/identity-governance/{category}/connectors/{connector}
+{"operation":"UPDATE","properties":[{"name":"hibp.enable","value":"true"}]}
+```
 
-For questions or issues, please create an issue in the [GitHub repository](https://github.com/wso2-extensions/identity-password-validator-hibp/issues).
+The two switches are booleans on purpose. The Console's generic connector form picks a toggle when a
+property's value is `true` or `false` and a text box otherwise, so a setting modelled as an enumeration would
+make an administrator type `allow` or `deny` by hand.
+
+**There is no API key.** The range endpoint this connector calls is free and unauthenticated, so there is
+nothing to configure, store or protect, and nothing whose absence could silently disable the check - the 1.x
+failure this connector exists to avoid.
+
+The Console renders these in the order above, and that is why the connector is named `have-i-been-pwned`
+rather than `hibp`. When a connector's name is a prefix of its property names, `getConnectorListWithConfigs`
+matches every same-prefixed property on the first pass and emits them in the order the platform's property
+map happens to yield - a `HashMap` keyed by property name, so the order is arbitrary and shifts as other
+connectors are installed. Keeping the connector name outside the property namespace means each property is
+matched on its own pass and `getPropertyNames()` decides the order.
+
+## How it works
+
+The candidate password is hashed with SHA-1 in process. The first five characters of the digest are sent to
+the range endpoint; the remaining thirty-five never leave the deployment. The endpoint returns every suffix in
+that bucket — roughly eight hundred of them — and the match is made locally, so the service never learns the
+answer to its own query. `Add-Padding` is sent on every request so the response size does not reveal how many
+entries a bucket holds.
+
+Nothing is held between calls. Each check is answered from a fresh range lookup, so the connector keeps no
+password material in memory at all.
+
+> Range responses are cacheable in principle — a bucket is stable for hours and is shared by every password in
+> it — but caching is deferred to a later iteration. A five-character prefix covers one of 1,048,576 buckets
+> and each one costs about 116 KB to hold, so a cache large enough to hit usefully does not fit the heap. If
+> it comes back it must be sized for a resubmitted password, not for a shared corpus.
+
+The call is bounded by an explicit connect and read timeout and a retry count, so a failing endpoint costs a
+bounded wait per write and never hangs. Every failure — timeout, transport, quota, parse — is treated as
+*could not check* and never as *not found*. What that means for the password is the deployment's decision,
+not this connector's.
+
+> With the default policy, an outage refuses every password write in an organization that enabled this
+> source, including self-registration and password recovery, until the service answers again or the
+> organization switches `hibp.refuseWhenUnreachable` off. A policy that cannot be read is treated as the
+> default. An outage also costs that bounded wait on **every** password write. Suppressing the call after repeated
+> failures, so an outage costs one timeout rather than one per write, is deferred to a later iteration.
+
+## Upgrading from 1.x
+
+1.x was not a breach source. It registered a governance connector and an HTTP servlet, and hooked no
+credential-write path, so it could not refuse a password being set. 2.0 replaces that entirely.
+
+| 1.x | 2.0 |
+|---|---|
+| `/hibp` servlet taking a plaintext password | Removed. Nothing here accepts a password from a caller. |
+| `[[resource.access_control]]` with `secure = false` | No longer required, and should be removed. |
+| `hibp.password.validator` governance connector (`hibp.password.validator.enable`, `hibp.password.validator.api.key`) | Replaced by the `have-i-been-pwned` connector (`hibp.enable`, `hibp.refuseWhenUnreachable`). Values are not migrated. |
+| API key held as a plain governance property, returned in cleartext by the governance API | No key. The range endpoint needs none. |
+| Blank API key reported every password as clean, while presenting as enabled | No key is taken or sent, so there is no key to be missing. |
+| No enforcement | Enforced by the product's listener on every password-setting path. |
+
+**If you are running 1.x, remove the `(.*)/hibp(.*)` access-control entry from `deployment.toml`.** While it is
+present, the 1.x servlet accepts a plaintext password from an unauthenticated caller.
+
+**Re-enable the connector in every organization that used 1.x.** 2.0 reads new property names and `hibp.enable`
+defaults to `false`, so an organization that had 1.x switched on is not checked after the upgrade until it is
+switched on again. Any 1.x API key is no longer used and can be discarded. The old `hibp.password.validator.*` values stay in the governance store but nothing reads them.
+
+The live "check as you type" behaviour the 1.x servlet existed for is deliberately not reintroduced. A browser
+that wants it can query the range endpoint directly with a hash prefix, so Identity Server never sees the
+password at all.
+
+## Building a source of your own
+
+`BreachSource` is a published contract. Implement it and register the service:
+
+```java
+bundleContext.registerService(BreachSource.class, new MySource(), null);
+```
+
+The contract is versioned on its own compatibility rather than on the product's release number, so a connector
+importing `[1.0,2.0)` keeps resolving across product minors and majors.
+
+All five methods are abstract: `getId`, `getPriority`, `configure`, `isEnabled` and `check`. The interface was
+reduced to what the engine actually calls, so there is nothing optional left to default. An additive revision
+would add a default method rather than an abstract one, so an existing connector keeps compiling.

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com).
+ * Copyright (c) 2026, WSO2 LLC. (http://www.wso2.com).
  *
  * WSO2 LLC. licenses this file to you under the Apache License,
  * Version 2.0 (the "License"); you may not use this file except
@@ -18,147 +18,109 @@
 
 package org.wso2.identity.password.validator.hibp;
 
-import org.testng.Assert;
-import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.wso2.identity.password.validator.hibp.util.Constants;
+import org.wso2.carbon.identity.application.common.model.Property;
+import org.wso2.carbon.identity.governance.IdentityMgtConstants;
 
+import java.util.Arrays;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
+
 /**
- * Tests for the HIBPConnectorConfig class.
+ * The governance connector the Console renders and the management API serves.
  */
 public class HIBPConnectorConfigTest {
 
-    private HIBPConnectorConfig connectorConfig;
+    private static final String TENANT = "carbon.super";
 
-    @BeforeMethod
-    public void setUp() {
-        connectorConfig = new HIBPConnectorConfig();
+    private final HIBPConnectorConfig config = new HIBPConnectorConfig();
+
+    @Test
+    public void itIsPublishedUnderPasswordSecurity() {
+
+        assertEquals(config.getName(), "have-i-been-pwned");
+        assertEquals(config.getFriendlyName(), "Have I Been Pwned");
+        assertEquals(config.getCategory(), "Password Security");
+        assertEquals(config.getSubCategory(), "DEFAULT");
+    }
+
+    /** The Console renders the properties in this order. */
+    @Test
+    public void itPublishesTheTwoSwitchesInOrder() {
+
+        assertEquals(config.getPropertyNames(),
+                new String[] { HIBPConnectorConfig.ENABLE, HIBPConnectorConfig.REFUSE_WHEN_UNREACHABLE });
     }
 
     /**
-     * Test that the connector name is correctly returned.
+     * A connector name that prefixes its property names makes the management API emit them in arbitrary
+     * order, so {@link HIBPConnectorConfig#getPropertyNames()} would stop deciding it.
      */
     @Test
-    public void testGetName() {
-        Assert.assertEquals(connectorConfig.getName(), Constants.CONNECTOR_NAME,
-                "Connector name should match the constant");
+    public void theConnectorNameIsOutsideThePropertyNamespace() {
+
+        for (String name : config.getPropertyNames()) {
+            assertFalse(name.startsWith(config.getName()), name);
+        }
     }
 
-    /**
-     * Test that the friendly name is correctly returned.
-     */
+    /** The range endpoint needs no credential, so nothing secret is stored in or returned by the API. */
     @Test
-    public void testGetFriendlyName() {
-        Assert.assertEquals(connectorConfig.getFriendlyName(), "Pwned Passwords",
-                "Friendly name should be 'Pwned Passwords'");
+    public void noCredentialIsHeldInTheGovernanceStore() {
+
+        for (String name : config.getPropertyNames()) {
+            assertFalse(name.toLowerCase(Locale.ROOT).contains("key"), name);
+            assertFalse(name.startsWith("__secret__"), name);
+        }
+        assertTrue(config.getConfidentialPropertyValues(TENANT).isEmpty());
     }
 
-    /**
-     * Test that the category is correctly returned.
-     */
+    /** Installing the bundle changes nothing until an organization opts in, and an outage refuses by default. */
     @Test
-    public void testGetCategory() {
-        Assert.assertEquals(connectorConfig.getCategory(), "Password Policies",
-                "Category should be 'Password Policies'");
+    public void theSourceIsOffAndAnOutageRefusesByDefault() throws Exception {
+
+        Properties defaults = config.getDefaultPropertyValues(TENANT);
+        assertEquals(defaults.size(), 2);
+        assertEquals(defaults.get(HIBPConnectorConfig.ENABLE), "false");
+        assertEquals(defaults.get(HIBPConnectorConfig.REFUSE_WHEN_UNREACHABLE), "true");
     }
 
-    /**
-     * Test that the sub-category is correctly returned.
-     */
     @Test
-    public void testGetSubCategory() {
-        Assert.assertEquals(connectorConfig.getSubCategory(), "DEFAULT",
-                "Sub-category should be 'DEFAULT'");
+    public void defaultsForNamedPropertiesLeaveOutAnythingUnrecognised() throws Exception {
+
+        Map<String, String> defaults = config.getDefaultPropertyValues(
+                new String[] { HIBPConnectorConfig.ENABLE, "unknown.property" }, TENANT);
+        assertEquals(defaults.size(), 1);
+        assertEquals(defaults.get(HIBPConnectorConfig.ENABLE), "false");
     }
 
-    /**
-     * Test that the order is correctly returned.
-     */
+    /** Every published property has a label, a hint and a type, so the Console renders each one fully. */
     @Test
-    public void testGetOrder() {
-        Assert.assertEquals(connectorConfig.getOrder(), 0,
-                "Order should be 0");
+    public void everyPropertyIsLabelledDescribedAndTyped() {
+
+        Map<String, String> labels = config.getPropertyNameMapping();
+        Map<String, String> hints = config.getPropertyDescriptionMapping();
+        Map<String, Property> metadata = config.getMetaData();
+        for (String name : config.getPropertyNames()) {
+            assertTrue(labels.containsKey(name), "label for " + name);
+            assertTrue(hints.containsKey(name), "hint for " + name);
+            assertTrue(metadata.containsKey(name), "type for " + name);
+        }
+        assertEquals(labels.keySet(), metadata.keySet());
+        assertEquals(hints.size(), config.getPropertyNames().length);
     }
 
-    /**
-     * Test that the property names are correctly returned.
-     */
+    /** A boolean renders as a switch. Anything else would make an administrator type the value by hand. */
     @Test
-    public void testGetPropertyNames() {
-        String[] propertyNames = connectorConfig.getPropertyNames();
-        
-        Assert.assertEquals(propertyNames.length, 2, "Should return 2 property names");
-        Assert.assertEquals(propertyNames[0], Constants.CONNECTOR_ENABLE, "First property should be CONNECTOR_ENABLE");
-        Assert.assertEquals(propertyNames[1], Constants.CONNECTOR_API_KEY, "Second property should be CONNECTOR_API_KEY");
-    }
+    public void bothSwitchesAreTypedAsBooleans() {
 
-    /**
-     * Test that the property name mapping is correctly returned.
-     */
-    @Test
-    public void testGetPropertyNameMapping() {
-        Map<String, String> nameMapping = connectorConfig.getPropertyNameMapping();
-        
-        Assert.assertEquals(nameMapping.size(), 2, "Should return 2 property name mappings");
-        Assert.assertTrue(nameMapping.containsKey(Constants.CONNECTOR_ENABLE), "Should contain CONNECTOR_ENABLE key");
-        Assert.assertTrue(nameMapping.containsKey(Constants.CONNECTOR_API_KEY), "Should contain CONNECTOR_API_KEY key");
-        
-        // Verify the friendly names are appropriate
-        Assert.assertEquals(nameMapping.get(Constants.CONNECTOR_ENABLE), "Enable HaveIBeenPwned pwned password checker",
-                "CONNECTOR_ENABLE should map to 'Enable HaveIBeenPwned pwned password checker'");
-        Assert.assertEquals(nameMapping.get(Constants.CONNECTOR_API_KEY), "HaveIBeenPwned API key",
-                "CONNECTOR_API_KEY should map to 'HaveIBeenPwned API key'");
-    }
-
-    /**
-     * Test that the property description mapping is correctly returned.
-     */
-    @Test
-    public void testGetPropertyDescriptionMapping() {
-        Map<String, String> descMapping = connectorConfig.getPropertyDescriptionMapping();
-        
-        Assert.assertEquals(descMapping.size(), 2, "Should return 2 property description mappings");
-        Assert.assertTrue(descMapping.containsKey(Constants.CONNECTOR_ENABLE), "Should contain CONNECTOR_ENABLE key");
-        Assert.assertTrue(descMapping.containsKey(Constants.CONNECTOR_API_KEY), "Should contain CONNECTOR_API_KEY key");
-        
-        // Verify the descriptions are appropriate
-        Assert.assertTrue(descMapping.get(Constants.CONNECTOR_ENABLE).contains("HaveIBeenPwned"),
-                "CONNECTOR_ENABLE description should mention HaveIBeenPwned");
-        Assert.assertTrue(descMapping.get(Constants.CONNECTOR_API_KEY).contains("API key"),
-                "CONNECTOR_API_KEY description should mention API key");
-    }
-
-    /**
-     * Test that the default properties are correctly returned.
-     */
-    @Test
-    public void testGetDefaultPropertyValues() throws Exception {
-        Properties properties = connectorConfig.getDefaultPropertyValues("carbon.super");
-        
-        Assert.assertEquals(properties.size(), 2, "Should return 2 default property values");
-        Assert.assertEquals(properties.getProperty(Constants.CONNECTOR_ENABLE), "false", 
-                "Default value for CONNECTOR_ENABLE should be 'false'");
-        Assert.assertEquals(properties.getProperty(Constants.CONNECTOR_API_KEY), "", 
-                "Default value for CONNECTOR_API_KEY should be empty string");
-    }
-
-    /**
-     * Test the implementation of getDefaultPropertyValues with String[] and tenantDomain parameters.
-     */
-    @Test
-    public void testGetDefaultPropertyValuesWithPropertyNames() throws Exception {
-        String[] propertyNames = new String[]{
-                Constants.CONNECTOR_ENABLE,
-                Constants.CONNECTOR_API_KEY
-        };
-        
-        Map<String, String> defaultValues = connectorConfig.getDefaultPropertyValues(propertyNames, "carbon.super");
-        
-        Assert.assertNotNull(defaultValues, "Default values map should not be null");
-        // This method is expected to return an empty map as per current implementation
-        Assert.assertEquals(defaultValues.size(), 0, "Should return an empty map");
+        String bool = IdentityMgtConstants.DataTypes.BOOLEAN.getValue();
+        Arrays.stream(config.getPropertyNames()).forEach(name ->
+                assertEquals(config.getMetaData().get(name).getType(), bool, name));
     }
 }

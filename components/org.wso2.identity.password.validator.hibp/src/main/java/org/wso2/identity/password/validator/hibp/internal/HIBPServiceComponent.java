@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com).
+ * Copyright (c) 2026, WSO2 LLC. (http://www.wso2.com).
  *
  * WSO2 LLC. licenses this file to you under the Apache License,
  * Version 2.0 (the "License"); you may not use this file except
@@ -20,83 +20,90 @@ package org.wso2.identity.password.validator.hibp.internal;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.eclipse.equinox.http.helper.ContextPathServletAdaptor;
+import org.osgi.framework.ServiceRegistration;
 import org.osgi.service.component.ComponentContext;
-import org.osgi.service.component.annotations.*;
-import org.osgi.service.http.HttpService;
+import org.osgi.service.component.annotations.Activate;
+import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Deactivate;
+import org.wso2.identity.password.validator.hibp.HIBPBreachSource;
+import org.osgi.service.component.annotations.Reference;
+import org.osgi.service.component.annotations.ReferenceCardinality;
+import org.osgi.service.component.annotations.ReferencePolicy;
+import org.wso2.carbon.identity.breach.detection.spi.BreachSource;
 import org.wso2.carbon.identity.governance.IdentityGovernanceService;
 import org.wso2.carbon.identity.governance.common.IdentityConnectorConfig;
 import org.wso2.identity.password.validator.hibp.HIBPConnectorConfig;
-import org.wso2.identity.password.validator.hibp.HIBPServlet;
-import org.wso2.identity.password.validator.hibp.util.Constants;
-
-import javax.servlet.Servlet;
 
 /**
- * HIBP service component
+ * Have I Been Pwned breach source service component.
+ * <p>
+ * Publishing the breach source is the whole integration; the connector is reached through that service and
+ * nothing else.
  */
-@Component(name = "org.wso2.hibp.connector",
-        immediate = true)
+@Component(
+        name = "identity.breach.hibp.component",
+        immediate = true
+)
 public class HIBPServiceComponent {
 
-    private static final Log log = LogFactory.getLog(HIBPServiceComponent.class);
-    private HttpService httpService;
+    private static final Log LOG = LogFactory.getLog(HIBPServiceComponent.class);
 
+    private ServiceRegistration<BreachSource> registration;
+    private ServiceRegistration<IdentityConnectorConfig> connectorRegistration;
+    private HIBPBreachSource source;
+
+    /**
+     * Registers the breach source and this connector's own governance configuration.
+     */
     @Activate
     protected void activate(ComponentContext context) {
 
-        Servlet commonAuthServlet = new ContextPathServletAdaptor(new HIBPServlet(),
-                Constants.HIBP_SERVLET_PATH);
+        source = new HIBPBreachSource();
+        registration = context.getBundleContext().registerService(BreachSource.class, source, null);
+        // Publishing this gives the connector its per-organization settings and its Console presence. Both
+        // are removed when the bundle is removed.
+        connectorRegistration = context.getBundleContext()
+                .registerService(IdentityConnectorConfig.class, new HIBPConnectorConfig(), null);
+        LOG.info("The Have I Been Pwned breach source connector is registered.");
+    }
 
-        try {
-            httpService.registerServlet(Constants.HIBP_SERVLET_PATH, commonAuthServlet, null, null);
+    /**
+     * Unregisters both services.
+     */
+    @Deactivate
+    protected void deactivate(ComponentContext context) {
 
-            IdentityConnectorConfig connectorConfig = new HIBPConnectorConfig();
-            context.getBundleContext().registerService(IdentityConnectorConfig.class, connectorConfig, null);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to start HIBP component.", e);
+        if (connectorRegistration != null) {
+            connectorRegistration.unregister();
+            connectorRegistration = null;
         }
-
-        log.info("Successfully started HIBP component.");
+        if (registration != null) {
+            registration.unregister();
+            registration = null;
+        }
+        source = null;
+        LOG.info("The Have I Been Pwned breach source connector is unregistered.");
     }
 
     @Reference(
-            name = "osgi.httpservice",
-            service = HttpService.class,
+            name = "identity.governance.service",
+            service = IdentityGovernanceService.class,
             cardinality = ReferenceCardinality.MANDATORY,
             policy = ReferencePolicy.DYNAMIC,
-            unbind = "unsetHttpService"
+            unbind = "unsetIdentityGovernanceService"
     )
-    protected void setHttpService(HttpService httpService) {
+    /**
+     * Binds the service this connector reads its per-organization settings from.
+     */
+    protected void setIdentityGovernanceService(IdentityGovernanceService service) {
 
-        if (log.isDebugEnabled()) {
-            log.debug("HTTP Service is set in the hibp bundle");
-        }
-
-        this.httpService = httpService;
+        HIBPDataHolder.getInstance().setIdentityGovernanceService(service);
     }
 
-    protected void unsetHttpService(HttpService httpService) {
-
-        if (log.isDebugEnabled()) {
-            log.debug("HTTP Service is unset in the hibp bundle");
-        }
-
-        this.httpService = null;
-    }
-
-    @Reference(
-            name = "IdentityGovernanceService",
-            service = org.wso2.carbon.identity.governance.IdentityGovernanceService.class,
-            cardinality = ReferenceCardinality.MANDATORY,
-            policy = ReferencePolicy.DYNAMIC,
-            unbind = "unsetIdentityGovernanceService")
-    protected void setIdentityGovernanceService(IdentityGovernanceService identityGovernanceService) {
-
-        HIBPDataHolder.getInstance().setIdentityGovernanceService(identityGovernanceService);
-    }
-
-    protected void unsetIdentityGovernanceService(IdentityGovernanceService identityGovernanceService) {
+    /**
+     * Clears the reference, after which the source reports itself not enabled rather than assuming on.
+     */
+    protected void unsetIdentityGovernanceService(IdentityGovernanceService service) {
 
         HIBPDataHolder.getInstance().setIdentityGovernanceService(null);
     }

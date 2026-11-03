@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com).
+ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com).
  *
  * WSO2 LLC. licenses this file to you under the Apache License,
  * Version 2.0 (the "License"); you may not use this file except
@@ -18,152 +18,181 @@
 
 package org.wso2.identity.password.validator.hibp;
 
+import org.wso2.carbon.identity.application.common.model.Property;
 import org.wso2.carbon.identity.governance.IdentityGovernanceException;
+import org.wso2.carbon.identity.governance.IdentityMgtConstants;
 import org.wso2.carbon.identity.governance.common.IdentityConnectorConfig;
-import org.wso2.identity.password.validator.hibp.util.Constants;
 
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
 /**
- * HIBP connector config implementation.
- * 
- * This class implements the IdentityConnectorConfig interface to provide configuration
- * for the HaveIBeenPwned (HIBP) password validator. It defines configuration properties
- * like enabling/disabling the validator and setting the API key required for HIBP service.
- * 
- * The connector allows WSO2 Identity Server to validate passwords against the HIBP database
- * of compromised passwords, enhancing security by preventing the use of known breached passwords.
+ * Governance connector configuration for the Have I Been Pwned breach source.
+ * <p>
+ * Publishing this gives the connector per-organization settings and a Console presence, both tied to the
+ * bundle being deployed.
  */
 public class HIBPConnectorConfig implements IdentityConnectorConfig {
 
     /**
-     * Returns the connector name used internally to identify this connector.
-     * 
-     * @return The internal name of the connector as defined in Constants.CONNECTOR_NAME
+     * Not "hibp", and not a prefix of any property name below. When it is, the management API collects the
+     * properties in arbitrary map order and {@link #getPropertyNames()} stops deciding the rendered order.
+     */
+    public static final String CONNECTOR_NAME = "have-i-been-pwned";
+    public static final String CATEGORY = "Password Security";
+
+    public static final String ENABLE = "hibp.enable";
+    public static final String REFUSE_WHEN_UNREACHABLE = "hibp.refuseWhenUnreachable";
+
+    /**
+     * @return the connector id the management API and Console address it by.
      */
     @Override
     public String getName() {
-        return Constants.CONNECTOR_NAME;
+
+        return CONNECTOR_NAME;
     }
 
     /**
-     * Returns the human-readable friendly name that will be displayed in the UI.
-     * 
-     * @return The display name for this connector
+     * @return the label shown in the Console.
      */
     @Override
     public String getFriendlyName() {
-        return "Pwned Passwords";
+
+        return "Have I Been Pwned";
     }
 
     /**
-     * Returns the category under which this connector will be grouped in the UI.
-     * Places this connector under password policies section in the management console.
-     * 
-     * @return The category name for grouping this connector
+     * @return the Console category this connector appears under.
      */
     @Override
     public String getCategory() {
-        return "Password Policies";
+
+        return CATEGORY;
     }
 
     /**
-     * Returns the sub-category for additional grouping if needed.
-     * Currently uses the default sub-category.
-     * 
-     * @return The sub-category name
+     * @return the sub-category. This connector uses the default.
      */
     @Override
     public String getSubCategory() {
+
         return "DEFAULT";
     }
 
     /**
-     * Determines the display order of this connector relative to others in the same category.
-     * Lower numbers appear first in the UI.
-     * 
-     * @return The order priority as an integer
+     * @return the ordering hint within the category.
      */
     @Override
     public int getOrder() {
+
         return 0;
     }
 
     /**
-     * Maps internal property names to user-friendly display names for the UI.
-     * These names appear as labels in the management console.
-     * 
-     * @return A map of property keys to their display names
+     * @return the label shown for each property.
      */
     @Override
     public Map<String, String> getPropertyNameMapping() {
-        Map<String, String> nameMapping = new HashMap<>();
-        nameMapping.put(Constants.CONNECTOR_ENABLE, "Enable HaveIBeenPwned pwned password checker");
-        nameMapping.put(Constants.CONNECTOR_API_KEY, "HaveIBeenPwned API key");
-        return nameMapping;
+
+        Map<String, String> names = new LinkedHashMap<>();
+        names.put(ENABLE, "Enable");
+        names.put(REFUSE_WHEN_UNREACHABLE, "Refuse the password if this service cannot be reached");
+
+        return names;
     }
 
     /**
-     * Provides descriptions for each property to help administrators understand their purpose.
-     * These descriptions appear as help text in the management console.
-     * 
-     * @return A map of property keys to their descriptions
+     * @return the hint shown under each property.
      */
     @Override
     public Map<String, String> getPropertyDescriptionMapping() {
-        Map<String, String> descriptionMapping = new HashMap<>();
-        descriptionMapping.put(Constants.CONNECTOR_ENABLE, "Validate user passwords with HaveIBeenPwned pwned " +
-                "password checker.");
-        descriptionMapping.put(Constants.CONNECTOR_API_KEY, "API key for the HaveIBeenPwned service.");
-        return descriptionMapping;
+
+        // One line each. A hint that wraps runs into the switch on the right and reads as though it
+        // belongs to the next property.
+        Map<String, String> descriptions = new LinkedHashMap<>();
+        descriptions.put(ENABLE, "Refuse passwords found in the Have I Been Pwned breach corpus.");
+        descriptions.put(REFUSE_WHEN_UNREACHABLE, "Block password changes while the service is unreachable.");
+
+        return descriptions;
     }
 
     /**
-     * Returns the list of property names that this connector supports.
-     * These properties can be configured through the management console.
-     * 
-     * @return An array of property name strings
+     * @return the properties, in the order the Console renders them.
      */
     @Override
     public String[] getPropertyNames() {
-        return new String[]{
-                Constants.CONNECTOR_ENABLE,
-                Constants.CONNECTOR_API_KEY
-        };
+
+        return new String[] { ENABLE, REFUSE_WHEN_UNREACHABLE };
     }
 
     /**
-     * Provides default values for all properties when the connector is first initialized.
-     * By default, the connector is disabled and no API key is set.
-     * 
-     * @param tenantDomain The tenant domain for which to get default properties
-     * @return A Properties object containing the default values
-     * @throws IdentityGovernanceException If an error occurs while getting default properties
+     * Off by default, so installing the bundle changes nothing until an organization opts in. Once on, a
+     * password that could not be checked is refused unless the organization chooses otherwise.
+     *
+     * @return the defaults for an organization that has stored none.
      */
     @Override
     public Properties getDefaultPropertyValues(String tenantDomain) throws IdentityGovernanceException {
-        Map<String, String> defaultProperties = new HashMap<>();
-        defaultProperties.put(Constants.CONNECTOR_ENABLE, "false");
-        defaultProperties.put(Constants.CONNECTOR_API_KEY, "");
-        Properties properties = new Properties();
-        properties.putAll(defaultProperties);
-        return properties;
+
+        Properties defaults = new Properties();
+        defaults.put(ENABLE, "false");
+        // Refuse by default, so a password that could not be checked is never let through unnoticed. An
+        // organization that prefers availability during an outage can switch this off.
+        defaults.put(REFUSE_WHEN_UNREACHABLE, "true");
+
+        return defaults;
     }
 
     /**
-     * Provides default property values for a specific set of properties and tenant domain.
-     * Currently returns an empty map as it's not implemented specifically.
-     * 
-     * @param propertyNames An array of property names
-     * @param tenantDomain The tenant domain
-     * @return A map of property names to their default values
-     * @throws IdentityGovernanceException If an error occurs while getting default properties
+     * @return the defaults for the named properties only. Anything unrecognised is left out.
      */
     @Override
-    public Map<String, String> getDefaultPropertyValues(String[] propertyNames, String tenantDomain) 
+    public Map<String, String> getDefaultPropertyValues(String[] propertyNames, String tenantDomain)
             throws IdentityGovernanceException {
-        return new HashMap<>();
+
+        Map<String, String> defaults = new HashMap<>();
+        Properties all = getDefaultPropertyValues(tenantDomain);
+        for (String name : propertyNames) {
+            Object value = all.get(name);
+            if (value != null) {
+                defaults.put(name, String.valueOf(value));
+            }
+        }
+
+        return defaults;
+    }
+
+    /**
+     * @return no confidential properties. The range endpoint needs no credential, so none is held.
+     */
+    @Override
+    public List<String> getConfidentialPropertyValues(String tenantDomain) {
+
+        return Collections.emptyList();
+    }
+
+    /**
+     * @return the data type of each property, which is what decides the control the Console renders.
+     */
+    @Override
+    public Map<String, Property> getMetaData() {
+
+        Map<String, Property> metadata = new LinkedHashMap<>();
+
+        // The type decides the control the Console renders: a toggle for a boolean.
+        Property enable = new Property();
+        enable.setType(IdentityMgtConstants.DataTypes.BOOLEAN.getValue());
+        metadata.put(ENABLE, enable);
+
+        Property refuseWhenUnreachable = new Property();
+        refuseWhenUnreachable.setType(IdentityMgtConstants.DataTypes.BOOLEAN.getValue());
+        metadata.put(REFUSE_WHEN_UNREACHABLE, refuseWhenUnreachable);
+
+        return Collections.unmodifiableMap(metadata);
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com).
+ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com).
  *
  * WSO2 LLC. licenses this file to you under the Apache License,
  * Version 2.0 (the "License"); you may not use this file except
@@ -20,54 +20,44 @@ package org.wso2.identity.password.validator.hibp.internal;
 
 import org.wso2.carbon.identity.governance.IdentityGovernanceService;
 
+/**
+ * Have I Been Pwned connector data holder.
+ * <p>
+ * Holds the services this connector needs, chiefly the governance service its settings live in.
+ */
 public class HIBPDataHolder {
 
-    /**
-     * Singleton instance of the HIBPDataHolder class.
-     * This implements the Singleton pattern to ensure only one instance exists throughout the application.
-     */
     private static final HIBPDataHolder INSTANCE = new HIBPDataHolder();
 
-    /**
-     * Reference to the IdentityGovernanceService.
-     * This service provides governance capabilities for identity management operations
-     * and is injected through OSGi declarative services.
-     */
     private IdentityGovernanceService identityGovernanceService;
 
-    /**
-     * Private constructor to prevent instantiation from outside this class.
-     * This enforces the Singleton pattern by making the constructor inaccessible.
-     */
     private HIBPDataHolder() {
-        // Private constructor to enforce singleton pattern
+
     }
 
     /**
-     * Returns the singleton instance of HIBPDataHolder.
-     *
-     * @return The singleton instance of the HIBPDataHolder class
+     * @return the shared instance.
      */
     public static HIBPDataHolder getInstance() {
+
         return INSTANCE;
     }
 
     /**
-     * Retrieves the current IdentityGovernanceService instance.
-     * 
-     * @return The IdentityGovernanceService instance that provides governance features
+     * @return the governance service, or null when it is not bound. A caller must handle null rather than
+     * assume the source is enabled.
      */
     public IdentityGovernanceService getIdentityGovernanceService() {
+
         return identityGovernanceService;
     }
 
     /**
-     * Sets the IdentityGovernanceService instance.
-     * This method is called by the OSGi service component to inject the service reference.
-     *
-     * @param identityGovernanceService The IdentityGovernanceService instance to be used
+     * @param identityGovernanceService the service holding this connector's per-organization settings, or
+     *                                  null when it is unbound.
      */
     public void setIdentityGovernanceService(IdentityGovernanceService identityGovernanceService) {
+
         this.identityGovernanceService = identityGovernanceService;
     }
 }
